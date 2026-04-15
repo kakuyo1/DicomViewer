@@ -1,0 +1,6 @@
+build/
+compile_commands.json
+AGENTS.md
+third_party/
+docs/
+.qtcreator/

@@ -1,0 +1,36 @@
+#titleBarWidget {
+    background-color: #171b22;
+    border-bottom: 1px solid #2c313c;
+}
+
+#titleBarLogoLabel {
+    color: #e7ebf3;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#titleBarFileButton,
+#titleBarMinimizeButton,
+#titleBarMaximizeButton,
+#titleBarCloseButton {
+    color: #e7ebf3;
+    border: none;
+    border-radius: 6px;
+    padding: 0 10px;
+    background: transparent;
+}
+
+#titleBarFileButton {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#titleBarFileButton:hover,
+#titleBarMinimizeButton:hover,
+#titleBarMaximizeButton:hover {
+    background-color: #242a35;
+}
+
+#titleBarCloseButton:hover {
+    background-color: #c42b1c;
+}
