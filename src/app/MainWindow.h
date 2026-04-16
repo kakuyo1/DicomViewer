@@ -3,6 +3,10 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <optional>
+
+#include "core/model/dicom/DicomSeries.h"
+
 class TitleBarWidget;
 class StackToolBar;
 class ViewModeBar;
@@ -18,6 +22,8 @@ public:
 
 private:
     void setupUi();
+    void handleOpenFolderRequested();
+    void setCurrentSeries(const DicomSeries &series);
 
 private:
     TitleBarWidget * mTitleBar        = nullptr;
@@ -25,4 +31,5 @@ private:
     ViewModeBar    * mViewModeBar     = nullptr;
     WorkSpaceWidget* mWorkSpaceWidget = nullptr;
     ThumbnailPanel * mThumbnailPanel  = nullptr;
+    std::optional<DicomSeries> mCurrentSeries;
 };

@@ -16,21 +16,21 @@
 namespace
 {
 
-QString resolveStyleSheetPath(const QString &styleSheetPath)
+QString resolveProjectRelativePath(const QString &relativePath)
 {
-    const QFileInfo inputInfo(styleSheetPath);
+    const QFileInfo inputInfo(relativePath);
     if (inputInfo.isAbsolute() && inputInfo.exists()) {
         return inputInfo.absoluteFilePath();
     }
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
-        QFileInfo(styleSheetPath).absoluteFilePath(),
-        QDir::current().absoluteFilePath(styleSheetPath),
-        QDir(appDir).absoluteFilePath(styleSheetPath),
-        QDir(appDir).absoluteFilePath(QStringLiteral("../") + styleSheetPath),
-        QDir(appDir).absoluteFilePath(QStringLiteral("../../") + styleSheetPath),
-        QDir(appDir).absoluteFilePath(QStringLiteral("../../../") + styleSheetPath),
+        QFileInfo(relativePath).absoluteFilePath(),
+        QDir::current().absoluteFilePath(relativePath),
+        QDir(appDir).absoluteFilePath(relativePath),
+        QDir(appDir).absoluteFilePath(QStringLiteral("../") + relativePath),
+        QDir(appDir).absoluteFilePath(QStringLiteral("../../") + relativePath),
+        QDir(appDir).absoluteFilePath(QStringLiteral("../../../") + relativePath),
     };
 
     for (const QString &candidate : candidates) {
@@ -65,6 +65,24 @@ void initializeLogging(spdlog::level::level_enum level)
     spdlog::info("spdlog initialized");
 }
 
+bool initializeDcmtkDictionary()
+{
+    const QString dictionaryPath = resolveProjectRelativePath(
+        QStringLiteral("third_party/dcmtk/share/dcmtk-3.7.0-DEV/dicom.dic"));
+    if (dictionaryPath.isEmpty()) {
+        spdlog::warn("Failed to locate DCMTK dicom.dic");
+        return false;
+    }
+
+    if (!qputenv("DCMDICTPATH", dictionaryPath.toUtf8())) {
+        spdlog::warn("Failed to set DCMDICTPATH");
+        return false;
+    }
+
+    spdlog::info("Configured DCMTK dictionary: {}", dictionaryPath.toStdString());
+    return true;
+}
+
 bool applyGlobalStyleSheet(QApplication &app)
 {
     return applyGlobalStyleSheet(app, QStringLiteral("src/theme/style.qss"));
@@ -72,7 +90,7 @@ bool applyGlobalStyleSheet(QApplication &app)
 
 bool applyGlobalStyleSheet(QApplication &app, const QString &styleSheetPath)
 {
-    const QString resolvedPath = resolveStyleSheetPath(styleSheetPath);
+    const QString resolvedPath = resolveProjectRelativePath(styleSheetPath);
     if (resolvedPath.isEmpty()) {
         spdlog::warn("Failed to locate style sheet: {}", styleSheetPath.toStdString());
         return false;

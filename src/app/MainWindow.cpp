@@ -1,9 +1,15 @@
 #include "app/MainWindow.h"
 
+#include <QFileDialog>
 #include <QHBoxLayout>
+#include <QMessageBox>
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <spdlog/spdlog.h>
+
+#include "core/worker/dicom/DicomSeriesScanner.h"
+#include "ui/dialogs/SeriesSelectionDialog.h"
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
 #include "ui/widgets/WorkSpaceWidget.h"
@@ -69,4 +75,61 @@ void MainWindow::setupUi()
     rootLayout->addWidget(contentContainer, 1);
 
     setCentralWidget(central);
+
+    connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, &MainWindow::handleOpenFolderRequested);
+}
+
+void MainWindow::handleOpenFolderRequested()
+{
+    const QString directoryPath = QFileDialog::getExistingDirectory(
+        this,
+        QStringLiteral("Open DICOM Folder"));
+    if (directoryPath.isEmpty()) {
+        return;
+    }
+
+    DicomSeriesScanner scanner;
+    const QVector<DicomSeries> seriesList = scanner.scanDirectory(directoryPath);
+    if (seriesList.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("No CT Series Found"),
+            QStringLiteral("No readable CT DICOM series were found in the selected folder."));
+        spdlog::warn("No readable CT series found in folder: {}", directoryPath.toStdString());
+        return;
+    }
+
+    if (seriesList.size() == 1) {
+        setCurrentSeries(seriesList.first());
+        return;
+    }
+
+    SeriesSelectionDialog dialog(seriesList, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        spdlog::info("Series selection dialog cancelled");
+        return;
+    }
+
+    const int selectedIndex = dialog.selectedSeriesIndex();
+    if (selectedIndex < 0 || selectedIndex >= seriesList.size()) {
+        spdlog::warn("Series selection dialog returned invalid index: {}", selectedIndex);
+        return;
+    }
+
+    setCurrentSeries(seriesList.at(selectedIndex));
+}
+
+void MainWindow::setCurrentSeries(const DicomSeries &series)
+{
+    mCurrentSeries = series;
+
+    const QString description = series.seriesDescription.isEmpty()
+        ? QStringLiteral("(No Series Description)")
+        : series.seriesDescription;
+
+    spdlog::info(
+        "Selected CT series: {} | {} slices | {}",
+        description.toStdString(),
+        series.slices.size(),
+        series.pathSummary.toStdString());
 }

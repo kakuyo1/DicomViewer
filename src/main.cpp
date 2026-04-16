@@ -12,13 +12,16 @@ int main(int argc, char *argv[])
     // 1) spdlog
     util::initializeLogging(spdlog::level::debug);
 
-    // 2) qss
+    // 2) dcmtk dictionary
+    util::initializeDcmtkDictionary();
+
+    // 3) qss
     util::applyGlobalStyleSheet(app);
 
-    // 3) ui
+    // 4) ui
     MainWindow window;
     window.show();
 
-    // 4) event loop
+    // 5) event loop
     return app.exec();
 }
