@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "core/model/dicom/DicomSeries.h"
+#include "core/model/volume/VolumeData.h"
 
 class TitleBarWidget;
 class StackToolBar;
@@ -24,6 +25,7 @@ private:
     void setupUi();
     void handleOpenFolderRequested();
     void setCurrentSeries(const DicomSeries &series);
+    bool buildVolumeForCurrentSeries();
 
 private:
     TitleBarWidget * mTitleBar        = nullptr;
@@ -32,4 +34,5 @@ private:
     WorkSpaceWidget* mWorkSpaceWidget = nullptr;
     ThumbnailPanel * mThumbnailPanel  = nullptr;
     std::optional<DicomSeries> mCurrentSeries;
+    std::optional<VolumeData> mCurrentVolumeData;
 };

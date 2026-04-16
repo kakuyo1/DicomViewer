@@ -110,7 +110,9 @@ QVector<DicomSeries> DicomSeriesScanner::scanDirectory(const QString &directoryP
     }
 
     for (DicomSeries &series : seriesList) {
+        /** @note 优先按InstanceNumber排序, 如果没有，按文件路径排序 */
         std::sort(series.slices.begin(), series.slices.end(), sliceLessThan);
+        /** @note 找出所有切片的公共父目录 */
         series.pathSummary = buildPathSummary(series.slices);
     }
 

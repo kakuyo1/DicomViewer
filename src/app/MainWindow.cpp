@@ -9,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include "core/worker/dicom/DicomSeriesScanner.h"
+#include "core/worker/volume/VolumeBuilder.h"
 #include "ui/dialogs/SeriesSelectionDialog.h"
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
@@ -122,6 +123,7 @@ void MainWindow::handleOpenFolderRequested()
 void MainWindow::setCurrentSeries(const DicomSeries &series)
 {
     mCurrentSeries = series;
+    mCurrentVolumeData.reset();
 
     const QString description = series.seriesDescription.isEmpty()
         ? QStringLiteral("(No Series Description)")
@@ -132,4 +134,39 @@ void MainWindow::setCurrentSeries(const DicomSeries &series)
         description.toStdString(),
         series.slices.size(),
         series.pathSummary.toStdString());
+
+    if (!buildVolumeForCurrentSeries()) {
+        mCurrentSeries.reset();
+    }
+}
+
+bool MainWindow::buildVolumeForCurrentSeries()
+{
+    if (!mCurrentSeries.has_value()) {
+        return false;
+    }
+
+    VolumeBuilder builder;
+    QString errorMessage;
+    const auto volumeData = builder.build(*mCurrentSeries, &errorMessage);
+    if (!volumeData.has_value()) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("Volume Build Failed"),
+            errorMessage.isEmpty() ? QStringLiteral("Failed to build volume data from the selected series.") : errorMessage);
+        spdlog::warn("Volume build failed: {}", errorMessage.toStdString());
+        return false;
+    }
+
+    mCurrentVolumeData = *volumeData;
+    spdlog::info(
+        "Built volume data: {} x {} x {} | voxels={} | spacing=({}, {}, {})",
+        mCurrentVolumeData->width,
+        mCurrentVolumeData->height,
+        mCurrentVolumeData->depth,
+        mCurrentVolumeData->voxels.size(),
+        mCurrentVolumeData->spacingX,
+        mCurrentVolumeData->spacingY,
+        mCurrentVolumeData->spacingZ);
+    return true;
 }
