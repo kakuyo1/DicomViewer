@@ -5,8 +5,11 @@
 class ThumbnailPanel : public QListView
 {
     Q_OBJECT
+
 public:
-    explicit ThumbnailPanel(QWidget* parent = nullptr);
+    explicit ThumbnailPanel(QWidget *parent = nullptr);
     ~ThumbnailPanel();
+
 private:
+    void setupUi();
 };

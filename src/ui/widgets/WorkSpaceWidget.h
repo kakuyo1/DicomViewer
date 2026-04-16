@@ -6,10 +6,15 @@
 
 class WorkSpaceWidget : public QStackedWidget
 {
+    Q_OBJECT
+
 public:
     explicit WorkSpaceWidget(QWidget *parent = nullptr);
     ~WorkSpaceWidget();
 
 private:
-    StackPage* mStackPage;
+    void setupUi();
+
+private:
+    StackPage *mStackPage = nullptr;
 };

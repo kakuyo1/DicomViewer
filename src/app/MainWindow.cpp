@@ -1,11 +1,8 @@
 #include "app/MainWindow.h"
 
 #include <QHBoxLayout>
-#include <QLabel>
 #include <QVBoxLayout>
 #include <QWidget>
-
-#include <spdlog/spdlog.h>
 
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
@@ -21,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::setupUi()
 {
-    resize(1280, 800);
+    resize(1440, 810);
     setMinimumSize(960, 640);
     setWindowFlag(Qt::FramelessWindowHint, true);
 
@@ -35,38 +32,41 @@ void MainWindow::setupUi()
     mTitleBar = new TitleBarWidget(central);
     mTitleBar->setBarHeight(40);
 
-    auto *contentPlaceholder = new QWidget(central);
-    contentPlaceholder->setObjectName(QStringLiteral("mainContentPlaceholder"));
+    auto *toolBarContainer = new QWidget(central);
+    auto *toolBarLayout = new QHBoxLayout(toolBarContainer);
+    toolBarLayout->setContentsMargins(16, 12, 16, 12);
+    toolBarLayout->setSpacing(0);
 
-    auto *contentLayout = new QHBoxLayout(contentPlaceholder);
-    contentLayout->setContentsMargins(0, 0, 0, 0);
-    contentLayout->setSpacing(0);
+    mStackToolBar = new StackToolBar(toolBarContainer);
+    toolBarLayout->addStretch();
+    toolBarLayout->addWidget(mStackToolBar);
+    toolBarLayout->addStretch();
 
-    auto *contentLabel = new QLabel(QStringLiteral("Main workspace placeholder"), contentPlaceholder);
-    contentLabel->setAlignment(Qt::AlignCenter);
-    contentLayout->addWidget(contentLabel);
+    auto *contentContainer = new QWidget(central);
+    auto *contentLayout = new QHBoxLayout(contentContainer);
+    contentLayout->setContentsMargins(16, 0, 16, 16);
+    contentLayout->setSpacing(16);
+
+    auto *leftContainer = new QWidget(contentContainer);
+    auto *leftLayout = new QVBoxLayout(leftContainer);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+
+    mViewModeBar = new ViewModeBar(leftContainer);
+    leftLayout->addStretch();
+    leftLayout->addWidget(mViewModeBar, 0, Qt::AlignHCenter);
+    leftLayout->addStretch();
+
+    mWorkSpaceWidget = new WorkSpaceWidget(contentContainer);
+    mThumbnailPanel = new ThumbnailPanel(contentContainer);
+
+    contentLayout->addWidget(leftContainer);
+    contentLayout->addWidget(mWorkSpaceWidget, 1);
+    contentLayout->addWidget(mThumbnailPanel);
 
     rootLayout->addWidget(mTitleBar);
-    rootLayout->addWidget(contentPlaceholder, 1);
-
-    central->setStyleSheet(QStringLiteral(R"(
-        #mainWindowRoot {
-            background-color: #10151c;
-        }
-        #mainContentPlaceholder {
-            background-color: #0d1117;
-        }
-        #mainContentPlaceholder QLabel {
-            color: #7e8795;
-            font-size: 14px;
-        }
-    )"));
+    rootLayout->addWidget(toolBarContainer);
+    rootLayout->addWidget(contentContainer, 1);
 
     setCentralWidget(central);
-
-    connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, []() {
-        spdlog::info("Title bar file button clicked");
-    });
-
-    spdlog::info("Frameless main window initialized");
 }

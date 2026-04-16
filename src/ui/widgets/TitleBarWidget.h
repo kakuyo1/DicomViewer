@@ -13,7 +13,7 @@ class TitleBarWidget : public QWidget
 public:
     explicit TitleBarWidget(QWidget *parent = nullptr);
 
-    int barHeight() const;
+    int  barHeight() const;
     void setBarHeight(int height);
     void syncWindowState();
 
@@ -42,7 +42,8 @@ private:
     QToolButton *mMinimizeButton = nullptr;
     QToolButton *mMaximizeButton = nullptr;
     QToolButton *mCloseButton    = nullptr;
-    bool mDragging               = false;
+
+    bool   mDragging             = false;
     QPoint mDragOffset;
     int mBarHeight               = 40;
 };
