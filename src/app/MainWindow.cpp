@@ -1,6 +1,5 @@
 #include "app/MainWindow.h"
 
-#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QVBoxLayout>
@@ -8,9 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include "core/worker/dicom/DicomSeriesScanner.h"
-#include "core/worker/volume/VolumeBuilder.h"
-#include "ui/dialogs/SeriesSelectionDialog.h"
+#include "services/controller/ImportController.h"
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
 #include "ui/widgets/WorkSpaceWidget.h"
@@ -82,83 +79,29 @@ void MainWindow::setupUi()
 
 void MainWindow::handleOpenFolderRequested()
 {
-    const QString directoryPath = QFileDialog::getExistingDirectory(
-        this,
-        QStringLiteral("Open DICOM Folder"));
-    if (directoryPath.isEmpty()) {
+    ImportController importController;
+    QString errorMessage;
+    const auto importResult = importController.importFromFolder(this, &errorMessage);
+    if (!importResult.has_value()) {
+        if (!errorMessage.isEmpty()) {
+            QMessageBox::warning(this, QStringLiteral("Import Failed"), errorMessage);
+        }
         return;
     }
 
-    DicomSeriesScanner scanner;
-    const QVector<DicomSeries> seriesList = scanner.scanDirectory(directoryPath);
-    if (seriesList.isEmpty()) {
-        QMessageBox::warning(
-            this,
-            QStringLiteral("No CT Series Found"),
-            QStringLiteral("No readable CT DICOM series were found in the selected folder."));
-        spdlog::warn("No readable CT series found in folder: {}", directoryPath.toStdString());
-        return;
-    }
+    mCurrentSeries = importResult->selectedSeries;
+    mCurrentVolumeData = importResult->volumeData;
 
-    if (seriesList.size() == 1) {
-        setCurrentSeries(seriesList.first());
-        return;
-    }
-
-    SeriesSelectionDialog dialog(seriesList, this);
-    if (dialog.exec() != QDialog::Accepted) {
-        spdlog::info("Series selection dialog cancelled");
-        return;
-    }
-
-    const int selectedIndex = dialog.selectedSeriesIndex();
-    if (selectedIndex < 0 || selectedIndex >= seriesList.size()) {
-        spdlog::warn("Series selection dialog returned invalid index: {}", selectedIndex);
-        return;
-    }
-
-    setCurrentSeries(seriesList.at(selectedIndex));
-}
-
-void MainWindow::setCurrentSeries(const DicomSeries &series)
-{
-    mCurrentSeries = series;
-    mCurrentVolumeData.reset();
-
-    const QString description = series.seriesDescription.isEmpty()
+    const QString description = mCurrentSeries->seriesDescription.isEmpty()
         ? QStringLiteral("(No Series Description)")
-        : series.seriesDescription;
+        : mCurrentSeries->seriesDescription;
 
     spdlog::info(
         "Selected CT series: {} | {} slices | {}",
         description.toStdString(),
-        series.slices.size(),
-        series.pathSummary.toStdString());
+        mCurrentSeries->slices.size(),
+        mCurrentSeries->pathSummary.toStdString());
 
-    if (!buildVolumeForCurrentSeries()) {
-        mCurrentSeries.reset();
-    }
-}
-
-bool MainWindow::buildVolumeForCurrentSeries()
-{
-    if (!mCurrentSeries.has_value()) {
-        return false;
-    }
-
-    VolumeBuilder builder;
-    QString errorMessage;
-    const auto volumeData = builder.build(*mCurrentSeries, &errorMessage);
-    if (!volumeData.has_value()) {
-        QMessageBox::warning(
-            this,
-            QStringLiteral("Volume Build Failed"),
-            errorMessage.isEmpty() ? QStringLiteral("Failed to build volume data from the selected series.") : errorMessage);
-        spdlog::warn("Volume build failed: {}", errorMessage.toStdString());
-        return false;
-    }
-
-    mCurrentVolumeData = *volumeData;
     spdlog::info(
         "Built volume data: {} x {} x {} | voxels={} | spacing=({}, {}, {})",
         mCurrentVolumeData->width,
@@ -168,5 +111,4 @@ bool MainWindow::buildVolumeForCurrentSeries()
         mCurrentVolumeData->spacingX,
         mCurrentVolumeData->spacingY,
         mCurrentVolumeData->spacingZ);
-    return true;
 }

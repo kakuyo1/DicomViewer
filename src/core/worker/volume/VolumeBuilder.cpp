@@ -7,8 +7,6 @@
 
 #include <dcmtk/dcmdata/dctk.h>
 
-#include <spdlog/spdlog.h>
-
 namespace
 {
 
@@ -117,6 +115,7 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
             return std::nullopt;
         }
 
+        /** @note 根据第一张slice提前reserve */
         if (sliceIndex == 0) {
             volumeData.width        = static_cast<int>(columns);
             volumeData.height       = static_cast<int>(rows);
@@ -150,6 +149,16 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
             return std::nullopt;
         }
 
+
+        /**
+         *  @note
+         *  - 一律先按 Uint16 读 PixelData
+         *  - 如果 PixelRepresentation == 0
+         *      - 直接按无符号解释
+         *  - 如果 PixelRepresentation == 1
+         *      - 保留 16-bit 原始位模式
+         *      - 再按 Sint16 解释
+         */
         for (int i = 0; i < pixelCount; ++i) {
             double rawValue = 0.0;
             if (pixelRepresentation == 0) {

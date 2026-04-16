@@ -24,8 +24,6 @@ public:
 private:
     void setupUi();
     void handleOpenFolderRequested();
-    void setCurrentSeries(const DicomSeries &series);
-    bool buildVolumeForCurrentSeries();
 
 private:
     TitleBarWidget * mTitleBar        = nullptr;
