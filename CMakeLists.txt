@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Qt
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)          # 先探测系统里是 Qt6 还是 Qt5，把版本号存进 QT_VERSION_MAJOR
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Concurrent)          # 先探测系统里是 Qt6 还是 Qt5，把版本号存进 QT_VERSION_MAJOR
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Concurrent)
 
 # VTK
 find_package(VTK CONFIG REQUIRED COMPONENTS
@@ -45,6 +45,7 @@ target_include_directories(DicomViewer
 target_link_libraries(DicomViewer
     PRIVATE
         Qt${QT_VERSION_MAJOR}::Widgets
+        Qt${QT_VERSION_MAJOR}::Concurrent
         DCMTK::dcmdata
         VTK::CommonCore
         VTK::RenderingCore

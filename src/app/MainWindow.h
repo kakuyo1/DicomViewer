@@ -7,7 +7,9 @@
 
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
+#include "services/model/ImportResult.h"
 
+class ImportController;
 class TitleBarWidget;
 class StackToolBar;
 class ViewModeBar;
@@ -24,8 +26,14 @@ public:
 private:
     void setupUi();
     void handleOpenFolderRequested();
+    void handleImportStarted();
+    void handleImportCancelled();
+    void handleImportFailed(const QString &message);
+    void handleImportSucceeded(const ImportResult &result);
+    void setImportBusy(bool busy);
 
 private:
+    ImportController *mImportController = nullptr;
     TitleBarWidget * mTitleBar        = nullptr;
     StackToolBar   * mStackToolBar    = nullptr;
     ViewModeBar    * mViewModeBar     = nullptr;
@@ -33,4 +41,5 @@ private:
     ThumbnailPanel * mThumbnailPanel  = nullptr;
     std::optional<DicomSeries> mCurrentSeries;
     std::optional<VolumeData> mCurrentVolumeData;
+    bool mImportInProgress = false;
 };

@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 
 #include <QHBoxLayout>
+#include <QApplication>
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -8,6 +9,7 @@
 #include <spdlog/spdlog.h>
 
 #include "services/controller/ImportController.h"
+#include "services/model/ImportResult.h"
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
 #include "ui/widgets/WorkSpaceWidget.h"
@@ -17,6 +19,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    mImportController = new ImportController(this);
     setupUi();
 }
 
@@ -75,22 +78,45 @@ void MainWindow::setupUi()
     setCentralWidget(central);
 
     connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, &MainWindow::handleOpenFolderRequested);
+    connect(mImportController, &ImportController::importStarted, this, &MainWindow::handleImportStarted);
+    connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);
+    connect(mImportController, &ImportController::importFailed, this, &MainWindow::handleImportFailed);
+    connect(mImportController, &ImportController::importSucceeded, this, &MainWindow::handleImportSucceeded);
 }
 
 void MainWindow::handleOpenFolderRequested()
 {
-    ImportController importController;
-    QString errorMessage;
-    const auto importResult = importController.importFromFolder(this, &errorMessage);
-    if (!importResult.has_value()) {
-        if (!errorMessage.isEmpty()) {
-            QMessageBox::warning(this, QStringLiteral("Import Failed"), errorMessage);
-        }
+    if (mImportController->isBusy()) {
         return;
     }
 
-    mCurrentSeries = importResult->selectedSeries;
-    mCurrentVolumeData = importResult->volumeData;
+    mImportController->startImportFromFolder(this);
+}
+
+void MainWindow::handleImportStarted()
+{
+    setImportBusy(true);
+}
+
+void MainWindow::handleImportCancelled()
+{
+    setImportBusy(false);
+}
+
+void MainWindow::handleImportFailed(const QString &message)
+{
+    setImportBusy(false);
+    if (!message.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Import Failed"), message);
+    }
+}
+
+void MainWindow::handleImportSucceeded(const ImportResult &result)
+{
+    setImportBusy(false);
+
+    mCurrentSeries = result.selectedSeries;
+    mCurrentVolumeData = result.volumeData;
 
     const QString description = mCurrentSeries->seriesDescription.isEmpty()
         ? QStringLiteral("(No Series Description)")
@@ -111,4 +137,14 @@ void MainWindow::handleOpenFolderRequested()
         mCurrentVolumeData->spacingX,
         mCurrentVolumeData->spacingY,
         mCurrentVolumeData->spacingZ);
+}
+
+void MainWindow::setImportBusy(bool busy)
+{
+    mImportInProgress = busy;
+    if (busy) {
+        QApplication::setOverrideCursor(Qt::BusyCursor);
+    } else {
+        QApplication::restoreOverrideCursor();
+    }
 }

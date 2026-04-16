@@ -14,6 +14,13 @@ struct SeriesScanResult
     int skippedNonCtCount  = 0;
 };
 
+struct VolumeBuildResult
+{
+    bool success = false;
+    VolumeData volumeData;
+    QString errorMessage;
+};
+
 struct ImportResult
 {
     DicomSeries selectedSeries;
