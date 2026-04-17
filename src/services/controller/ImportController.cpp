@@ -49,14 +49,7 @@ void ImportController::startImportFromFolder(QWidget *dialogParent)
 
     mScanWatcher.setFuture(QtConcurrent::run([directoryPath]() {
         DicomSeriesScanner scanner;
-        SeriesScanResult scanResult;
-        scanResult.seriesList = scanner.scanDirectory(directoryPath);
-
-        for (const DicomSeries &series : std::as_const(scanResult.seriesList)) {
-            scanResult.acceptedSliceCount += series.slices.size();
-        }
-
-        return scanResult;
+        return scanner.scanDirectory(directoryPath);
     }));
 }
 
@@ -112,8 +105,9 @@ void ImportController::handleVolumeBuildFinished()
 
     ImportResult result;
     result.selectedSeries = mPendingSelectedSeries;
-    result.volumeData = buildResult.volumeData;
     result.scanResult = mPendingScanResult;
+    result.volumeBuildResult = buildResult;
+    result.volumeBuildResult.warnings = mPendingScanResult.warnings + buildResult.warnings;
     emit importSucceeded(result);
     resetState();
 }
@@ -125,7 +119,7 @@ void ImportController::startVolumeBuild(const DicomSeries &selectedSeries)
     mVolumeWatcher.setFuture(QtConcurrent::run([selectedSeries]() {
         VolumeBuildResult result;
         VolumeBuilder builder;
-        const auto volumeData = builder.build(selectedSeries, &result.errorMessage);
+        const auto volumeData = builder.build(selectedSeries, &result.errorMessage, &result.warnings, &result.buildSummary);
         if (!volumeData.has_value()) {
             return result;
         }

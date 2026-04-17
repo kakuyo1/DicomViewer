@@ -3,13 +3,10 @@
 #include <QMainWindow>
 #include <QString>
 
-#include <optional>
-
-#include "core/model/dicom/DicomSeries.h"
-#include "core/model/volume/VolumeData.h"
 #include "services/model/ImportResult.h"
 
 class ImportController;
+class ViewerSession;
 class TitleBarWidget;
 class StackToolBar;
 class ViewModeBar;
@@ -34,12 +31,11 @@ private:
 
 private:
     ImportController *mImportController = nullptr;
+    ViewerSession *mViewerSession = nullptr;
     TitleBarWidget * mTitleBar        = nullptr;
     StackToolBar   * mStackToolBar    = nullptr;
     ViewModeBar    * mViewModeBar     = nullptr;
     WorkSpaceWidget* mWorkSpaceWidget = nullptr;
     ThumbnailPanel * mThumbnailPanel  = nullptr;
-    std::optional<DicomSeries> mCurrentSeries;
-    std::optional<VolumeData> mCurrentVolumeData;
     bool mImportInProgress = false;
 };

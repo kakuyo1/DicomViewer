@@ -1,9 +1,12 @@
 #include "core/worker/volume/VolumeBuilder.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 #include <QRegularExpression>
+#include <QStringList>
 
 #include <dcmtk/dcmdata/dctk.h>
 
@@ -27,7 +30,7 @@ double readFloat64Value(DcmDataset *dataset, const DcmTagKey &tagKey, double def
         return value;
     }
 
-    return defaultValue;
+    return defaultValue; /** @note 隐式转换Float64 -> double */
 }
 
 double readSpacingComponent(DcmDataset *dataset, int componentIndex, double defaultValue)
@@ -47,9 +50,79 @@ double readSpacingComponent(DcmDataset *dataset, int componentIndex, double defa
     return ok ? value : defaultValue;
 }
 
+double dot(const DicomVector3 &lhs, const DicomVector3 &rhs)
+{
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+
+/** @note 根据几何信息推导 Z 方向间距，而不是直接用 SliceThickness */
+bool tryDeriveSpacingZFromGeometry(const DicomSeries &series, double *spacingZ, QStringList *warnings)
+{
+    if (spacingZ == nullptr || series.slices.size() < 2 || !series.hasGeometryHints) {
+        return false;
+    }
+
+    const DicomSliceInfo &firstSlice = series.slices.front();
+    if (!firstSlice.hasImagePositionPatient || !firstSlice.hasSliceNormal) {
+        return false;
+    }
+
+    const DicomVector3 normal = firstSlice.sliceNormal;
+    std::vector<double> deltas;
+    deltas.reserve(static_cast<std::size_t>(series.slices.size() - 1)); /** @note 层间距离候选值 */
+
+    // 通过投影得到“沿切片法向的坐标”，解决图像未严格沿某个轴排列的问题
+    double previousProjection = dot(firstSlice.imagePositionPatient, normal);
+    for (int i = 1; i < series.slices.size(); ++i) {
+        const DicomSliceInfo &slice = series.slices.at(i);
+        if (!slice.hasImagePositionPatient) {
+            return false;
+        }
+
+        const double currentProjection = dot(slice.imagePositionPatient, normal);
+        const double delta = std::abs(currentProjection - previousProjection);
+        if (delta > 1e-6) { // 忽略极小值
+            deltas.push_back(delta);
+        }
+        previousProjection = currentProjection;
+    }
+
+    if (deltas.empty()) {
+        return false;
+    }
+
+    // 取中位数作为 spacingZ，不容易被单独几个异常的slice拉偏
+    std::sort(deltas.begin(), deltas.end());
+    const std::size_t middle = deltas.size() / 2;
+    const double median = (deltas.size() % 2 == 0)
+        ? 0.5 * (deltas[middle - 1] + deltas[middle])
+        : deltas[middle];
+
+    if (median <= 0.0) {
+        return false;
+    }
+
+    // 检测是否非均匀层距：如果某些 delta 和中位数相差较大，就发出警告
+    if (warnings != nullptr) {
+        for (double delta : deltas) {
+            if (std::abs(delta - median) > std::max(1e-3, median * 0.05)) {
+                warnings->push_back(QStringLiteral("Non-uniform slice spacing detected; spacingZ uses median projected distance."));
+                break;
+            }
+        }
+    }
+
+    *spacingZ = median;
+    return true;
+}
+
 } // namespace
 
-std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QString *errorMessage) const
+std::optional<VolumeData> VolumeBuilder::build(
+    const DicomSeries &series,
+    QString *errorMessage,
+    QStringList *warnings,
+    QString *buildSummary) const
 {
     if (series.slices.isEmpty()) {
         if (errorMessage != nullptr) {
@@ -61,8 +134,12 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
     VolumeData volumeData;
     volumeData.seriesInstanceUid = series.seriesInstanceUid;
     volumeData.seriesDescription = series.seriesDescription;
-    volumeData.modality = series.modality;
-    volumeData.depth = series.slices.size();
+    volumeData.modality          = series.modality;
+    volumeData.depth             = series.slices.size();
+
+    QStringList localWarnings;
+    double derivedSpacingZ = 1.0;
+    const bool hasGeometrySpacing = tryDeriveSpacingZFromGeometry(series, &derivedSpacingZ, &localWarnings);
 
     int expectedPixelCount = -1;
 
@@ -117,15 +194,39 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
 
         /** @note 根据第一张slice提前reserve */
         if (sliceIndex == 0) {
-            volumeData.width        = static_cast<int>(columns);
-            volumeData.height       = static_cast<int>(rows);
-            volumeData.spacingX     = readSpacingComponent(dataset, 1, 1.0);
-            volumeData.spacingY     = readSpacingComponent(dataset, 0, 1.0);
-            volumeData.spacingZ     = readFloat64Value(dataset, DCM_SliceThickness, 1.0);
-            volumeData.windowCenter = readFloat64Value(dataset, DCM_WindowCenter  , 0.0);
-            volumeData.windowWidth  = readFloat64Value(dataset, DCM_WindowWidth   , 0.0);
-            expectedPixelCount      = pixelCount;
+            volumeData.width                        = static_cast<int>(columns);
+            volumeData.height                       = static_cast<int>(rows);
+            volumeData.spacingX                     = readSpacingComponent(dataset, 1, 1.0);
+            volumeData.spacingY                     = readSpacingComponent(dataset, 0, 1.0);
+            volumeData.windowCenter                 = readFloat64Value(dataset, DCM_WindowCenter    , 0.0);
+            volumeData.windowWidth                  = readFloat64Value(dataset, DCM_WindowWidth     , 0.0);
+            volumeData.rescaleSlope                 = readFloat64Value(dataset, DCM_RescaleSlope    , 1.0);
+            volumeData.rescaleIntercept             = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
+
+            if (hasGeometrySpacing) { // 优先采用几何信息推导的spacingZ
+                volumeData.spacingZ = derivedSpacingZ;
+                volumeData.usedSliceThicknessAsSpacingZ = false;
+                volumeData.spacingZSource = QStringLiteral("ImagePositionPatientProjectedDelta");
+            } else if (slice.hasSliceThickness) { // 回退到使用sliceThickness作为spacingZ
+                volumeData.spacingZ = slice.sliceThickness;
+                volumeData.usedSliceThicknessAsSpacingZ = true;
+                volumeData.spacingZSource = QStringLiteral("SliceThicknessFallback");
+            } else { // 最糟糕的情况
+                volumeData.spacingZ = 1.0;
+                volumeData.usedSliceThicknessAsSpacingZ = false;
+                volumeData.spacingZSource = QStringLiteral("DefaultFallback");
+                localWarnings.push_back(QStringLiteral("Could not derive spacingZ from geometry or SliceThickness; defaulted to 1.0."));
+            }
+
+            expectedPixelCount = pixelCount;
             volumeData.voxels.reserve(volumeData.depth * pixelCount);
+
+            if (!series.hasGeometryHints) {
+                localWarnings.push_back(QStringLiteral("ImagePositionPatient/ImageOrientationPatient are incomplete or inconsistent; geometry sorting fell back to a temporary strategy."));
+            }
+            if (!slice.hasWindowCenter || !slice.hasWindowWidth) {
+                localWarnings.push_back(QStringLiteral("Window center/width are incomplete; default values may be used."));
+            }
         } else if (volumeData.width != static_cast<int>(columns)
                    || volumeData.height != static_cast<int>(rows)
                    || expectedPixelCount != pixelCount) {
@@ -139,16 +240,11 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
         const double rescaleSlope     = readFloat64Value(dataset, DCM_RescaleSlope    , 1.0);
         const double rescaleIntercept = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
 
-        unsigned long valueCount = 0;
-        const Uint16 *pixelData = nullptr;
-        if (!dataset->findAndGetUint16Array(DCM_PixelData, pixelData, &valueCount).good() || pixelData == nullptr
-            || static_cast<int>(valueCount) < pixelCount) {
-            if (errorMessage != nullptr) {
-                *errorMessage = QStringLiteral("Failed to read 16-bit pixel data: %1").arg(slice.filePath);
+        if (sliceIndex > 0 && (rescaleSlope != volumeData.rescaleSlope || rescaleIntercept != volumeData.rescaleIntercept)) {
+            if (!localWarnings.contains(QStringLiteral("Per-slice rescale parameters differ; build summary uses values from the first slice."))) {
+                localWarnings.push_back(QStringLiteral("Per-slice rescale parameters differ; build summary uses values from the first slice."));
             }
-            return std::nullopt;
         }
-
 
         /**
          *  @note
@@ -159,6 +255,16 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
          *      - 保留 16-bit 原始位模式
          *      - 再按 Sint16 解释
          */
+        unsigned long valueCount = 0;
+        const Uint16 *pixelData = nullptr;
+        if (!dataset->findAndGetUint16Array(DCM_PixelData, pixelData, &valueCount).good() || pixelData == nullptr
+            || static_cast<int>(valueCount) < pixelCount) {
+            if (errorMessage != nullptr) {
+                *errorMessage = QStringLiteral("Failed to read 16-bit pixel data: %1").arg(slice.filePath);
+            }
+            return std::nullopt;
+        }
+
         for (int i = 0; i < pixelCount; ++i) {
             double rawValue = 0.0;
             if (pixelRepresentation == 0) {
@@ -175,11 +281,42 @@ std::optional<VolumeData> VolumeBuilder::build(const DicomSeries &series, QStrin
         }
     }
 
+    // 即使前面都成功了，最后仍然检查一下结果是否合法
     if (!volumeData.isValid()) {
         if (errorMessage != nullptr) {
             *errorMessage = QStringLiteral("Volume build completed with invalid output data.");
         }
         return std::nullopt;
+    }
+
+    volumeData.geometrySummary = QStringLiteral(
+        "sort=%1; spacingZ source=%2; geometry hints=%3")
+                                     .arg(
+                                         series.sortStrategySummary.isEmpty()
+                                             ? QStringLiteral("unknown")
+                                             : series.sortStrategySummary,
+                                         volumeData.spacingZSource.isEmpty()
+                                             ? QStringLiteral("unknown")
+                                             : volumeData.spacingZSource,
+                                         series.hasGeometryHints ? QStringLiteral("available") : QStringLiteral("incomplete"));
+
+    if (warnings != nullptr) {
+        *warnings = localWarnings;
+    }
+
+    if (buildSummary != nullptr) {
+        *buildSummary = QStringLiteral(
+            "%1 x %2 x %3, spacing=(%4, %5, %6), WW/WL=(%7, %8), rescale=(%9, %10)")
+                            .arg(volumeData.width)
+                            .arg(volumeData.height)
+                            .arg(volumeData.depth)
+                            .arg(volumeData.spacingX, 0, 'f', 3)
+                            .arg(volumeData.spacingY, 0, 'f', 3)
+                            .arg(volumeData.spacingZ, 0, 'f', 3)
+                            .arg(volumeData.windowWidth, 0, 'f', 3)
+                            .arg(volumeData.windowCenter, 0, 'f', 3)
+                            .arg(volumeData.rescaleSlope, 0, 'f', 3)
+                            .arg(volumeData.rescaleIntercept, 0, 'f', 3);
     }
 
     return volumeData;

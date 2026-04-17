@@ -11,7 +11,14 @@ struct DicomSeries
     QString seriesDescription;
     QString modality;
     QString pathSummary;
+    QString sortStrategySummary;
+    bool hasGeometryHints = false;    /** @note IPP/IOP */
     QVector<DicomSliceInfo> slices;
+
+    int sliceCount() const
+    {
+        return slices.size();
+    }
 
     QString displayName() const
     {

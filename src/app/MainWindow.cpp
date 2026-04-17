@@ -10,6 +10,7 @@
 
 #include "services/controller/ImportController.h"
 #include "services/model/ImportResult.h"
+#include "services/state/ViewerSession.h"
 #include "ui/toolbars/StackToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
 #include "ui/widgets/WorkSpaceWidget.h"
@@ -20,7 +21,10 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     mImportController = new ImportController(this);
+    mViewerSession    = new ViewerSession(this);
+
     setupUi();
+    setupConnects();
 }
 
 void MainWindow::setupUi()
@@ -76,11 +80,15 @@ void MainWindow::setupUi()
     rootLayout->addWidget(contentContainer, 1);
 
     setCentralWidget(central);
+}
 
-    connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, &MainWindow::handleOpenFolderRequested);
-    connect(mImportController, &ImportController::importStarted, this, &MainWindow::handleImportStarted);
+void MainWindow::setupConnects()
+{
+    connect(mTitleBar, &TitleBarWidget::openFolderRequested,       this, &MainWindow::handleOpenFolderRequested);
+
+    connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);
-    connect(mImportController, &ImportController::importFailed, this, &MainWindow::handleImportFailed);
+    connect(mImportController, &ImportController::importFailed,    this, &MainWindow::handleImportFailed);
     connect(mImportController, &ImportController::importSucceeded, this, &MainWindow::handleImportSucceeded);
 }
 
@@ -115,28 +123,46 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
 {
     setImportBusy(false);
 
-    mCurrentSeries = result.selectedSeries;
-    mCurrentVolumeData = result.volumeData;
+    mViewerSession->setImportResult(result);
 
-    const QString description = mCurrentSeries->seriesDescription.isEmpty()
+    const DicomSeries *currentSeries     = mViewerSession->currentSeries();
+    const VolumeData  *currentVolumeData = mViewerSession->currentVolumeData();
+    if (currentSeries == nullptr || currentVolumeData == nullptr) {
+        spdlog::warn("ViewerSession did not retain a valid series/volume after import success");
+        return;
+    }
+
+    const QString description = currentSeries->seriesDescription.isEmpty()
         ? QStringLiteral("(No Series Description)")
-        : mCurrentSeries->seriesDescription;
+        : currentSeries->seriesDescription;
 
     spdlog::info(
         "Selected CT series: {} | {} slices | {}",
         description.toStdString(),
-        mCurrentSeries->slices.size(),
-        mCurrentSeries->pathSummary.toStdString());
+        currentSeries->slices.size(),
+        currentSeries->pathSummary.toStdString());
 
     spdlog::info(
-        "Built volume data: {} x {} x {} | voxels={} | spacing=({}, {}, {})",
-        mCurrentVolumeData->width,
-        mCurrentVolumeData->height,
-        mCurrentVolumeData->depth,
-        mCurrentVolumeData->voxels.size(),
-        mCurrentVolumeData->spacingX,
-        mCurrentVolumeData->spacingY,
-        mCurrentVolumeData->spacingZ);
+        "Scan summary: dir={} scanned={} readable={} accepted={} skipped_non_ct={} skipped_unreadable={} skipped_missing_uid={} series={} strategy={} geometry_hints={}",
+        result.scanResult.directoryPath.toStdString(),
+        result.scanResult.scannedFileCount,
+        result.scanResult.readableDicomCount,
+        result.scanResult.acceptedSliceCount,
+        result.scanResult.skippedNonCtCount,
+        result.scanResult.skippedUnreadableFileCount,
+        result.scanResult.skippedMissingSeriesUidCount,
+        result.scanResult.seriesCount,
+        currentSeries->sortStrategySummary.toStdString(),
+        currentSeries->hasGeometryHints);
+
+    spdlog::info(
+        "Build summary: {} | geometry={}",
+        result.volumeBuildResult.buildSummary.toStdString(),
+        currentVolumeData->geometrySummary.toStdString());
+
+    for (const QString &warning : result.volumeBuildResult.warnings) {
+        spdlog::warn("Import warning: {}", warning.toStdString());
+    }
 }
 
 void MainWindow::setImportBusy(bool busy)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QString>
+#include <QStringList>
 #include <QVector>
 
 #include "core/model/dicom/DicomSeries.h"
@@ -7,23 +9,30 @@
 
 struct SeriesScanResult
 {
+    QString directoryPath;
     QVector<DicomSeries> seriesList;
-    int scannedFileCount   = 0;
-    int readableDicomCount = 0;
-    int acceptedSliceCount = 0;
-    int skippedNonCtCount  = 0;
+    int scannedFileCount             = 0;
+    int readableDicomCount           = 0;
+    int acceptedSliceCount           = 0;
+    int skippedNonCtCount            = 0;
+    int skippedUnreadableFileCount   = 0;
+    int skippedMissingSeriesUidCount = 0;
+    int seriesCount                  = 0;
+    QStringList warnings;
 };
 
 struct VolumeBuildResult
 {
-    bool success = false;
+    bool success                     = false;
     VolumeData volumeData;
     QString errorMessage;
+    QStringList warnings;
+    QString buildSummary;
 };
 
 struct ImportResult
 {
     DicomSeries selectedSeries;
-    VolumeData volumeData;
     SeriesScanResult scanResult;
+    VolumeBuildResult volumeBuildResult;
 };
