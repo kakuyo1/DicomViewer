@@ -18,9 +18,12 @@ public:
 private:
     void setupUi();
     void refreshFromSession();
+    void updateDisplayedSlice();
+    void handleSliceScrollRequested(int steps);
     void clearDisplay();
 
 private:
     ViewerSession   *mViewerSession   = nullptr;
     SliceViewWidget *mSliceViewWidget = nullptr;
+    int mCurrentSliceIndex = -1;
 };

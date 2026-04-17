@@ -1,5 +1,7 @@
 #include "StackPage.h"
 
+#include <algorithm>
+
 #include <QVBoxLayout>
 
 #include "core/model/volume/VolumeData.h"
@@ -25,6 +27,8 @@ void StackPage::setupUi()
     mSliceViewWidget = new SliceViewWidget(this);
     mSliceViewWidget->setMinimumSize(640, 480);
     rootLayout->addWidget(mSliceViewWidget);
+
+    connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested, this, &StackPage::handleSliceScrollRequested);
 }
 
 void StackPage::setViewerSession(ViewerSession *viewerSession)
@@ -59,12 +63,53 @@ void StackPage::refreshFromSession()
     }
 
     /** @note 默认选择中间的切片展示，比较符合用户习惯 */
-    const int defaultSliceIndex = volumeData->depth / 2;
-    mSliceViewWidget->showAxialSlice(*volumeData, defaultSliceIndex);
+    mCurrentSliceIndex = volumeData->depth / 2;
+    updateDisplayedSlice();
+}
+
+void StackPage::updateDisplayedSlice()
+{
+    if (mSliceViewWidget == nullptr || mViewerSession == nullptr) {
+        return;
+    }
+
+    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        clearDisplay();
+        return;
+    }
+
+    if (mCurrentSliceIndex < 0) {
+        mCurrentSliceIndex = 0;
+    }
+
+    mCurrentSliceIndex = std::clamp(mCurrentSliceIndex, 0, volumeData->depth - 1);
+    mSliceViewWidget->showAxialSlice(*volumeData, mCurrentSliceIndex);
+}
+
+void StackPage::handleSliceScrollRequested(int steps)
+{
+    if (steps == 0 || mViewerSession == nullptr) {
+        return;
+    }
+
+    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        return;
+    }
+
+    if (mCurrentSliceIndex < 0) {
+        mCurrentSliceIndex = volumeData->depth / 2;
+    }
+
+    mCurrentSliceIndex += steps;
+    mCurrentSliceIndex = std::clamp(mCurrentSliceIndex, 0, volumeData->depth - 1);
+    updateDisplayedSlice();
 }
 
 void StackPage::clearDisplay()
 {
+    mCurrentSliceIndex = -1;
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->clearDisplay();
     }

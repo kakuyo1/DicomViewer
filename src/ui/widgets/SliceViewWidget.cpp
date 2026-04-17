@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include <QWheelEvent>
+
 #include <vtkCamera.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkImageActor.h>
@@ -75,24 +77,22 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
     const qint16 sliceMin = (sliceMinIt != sliceEnd) ? *sliceMinIt : 0;
     const qint16 sliceMax = (sliceMaxIt != sliceEnd) ? *sliceMaxIt : 0;
 
-    // 构建图片
-    vtkSmartPointer<vtkImageData> imageData = vtkSmartPointer<vtkImageData>::New();
-    imageData->SetDimensions(width, height, 1);
-    imageData->SetSpacing(volumeData.spacingX, volumeData.spacingY, 1.0);
-    imageData->AllocateScalars(VTK_UNSIGNED_CHAR, 1);
+    ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
 
     // 填充图片像素
+    unsigned char *buffer = static_cast<unsigned char *>(mImageData->GetScalarPointer(0, 0, 0));
     for (int y = 0; y < height; ++y) {
+        const qint16 *srcRow = volumeData.voxels.data() + sliceOffset + y * width;
+        /**
+         *  @note DICOM坐标系原点在左上角
+         *        VTK坐标系原点在左下角
+         *        翻转Y轴确保图像方向正确（y -> height -1 -y）
+         */
+        unsigned char *dstRow = buffer + (height - 1 - y) * width;
+
         for (int x = 0; x < width; ++x) {
-            const int index = sliceOffset + y * width + x;
-            /**
-             *  @note DICOM坐标系原点在左上角
-             *        VTK坐标系原点在左下角
-             *        翻转Y轴确保图像方向正确（y -> height -1 -y）
-             */
-            auto *pixel = static_cast<unsigned char *>(imageData->GetScalarPointer(x, height - 1 - y, 0));
-            pixel[0] = mapWindowLevel(
-                volumeData.voxels[index],
+            dstRow[x] = mapWindowLevel(
+                srcRow[x],
                 volumeData.windowCenter,
                 volumeData.windowWidth,
                 sliceMin,
@@ -100,7 +100,7 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         }
     }
 
-    mImageActor->SetInputData(imageData);
+    mImageData->Modified();
     mImageActor->SetVisibility(true);
     mRenderer->ResetCamera();
     /** @note 开启平行投影，避免透视变形 */
@@ -118,16 +118,70 @@ void SliceViewWidget::clearDisplay()
     }
 }
 
+void SliceViewWidget::wheelEvent(QWheelEvent *event)
+{
+    if (event == nullptr) {
+        return;
+    }
+
+    const int deltaY = event->angleDelta().y();
+    if (deltaY == 0) {
+        event->ignore();
+        return;
+    }
+
+    int steps = deltaY / 120;
+    if (steps == 0) {
+        steps = deltaY > 0 ? 1 : -1;
+    }
+
+    emit sliceScrollRequested(-steps);
+    event->accept();
+}
+
 void SliceViewWidget::setupVtkPipeline()
 {
     mRenderWindow = vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New();
     mRenderer     = vtkSmartPointer<vtkRenderer>::New();
     mImageActor   = vtkSmartPointer<vtkImageActor>::New();
+    mImageData    = vtkSmartPointer<vtkImageData>::New();
 
     mRenderer->SetBackground(0.0, 0.0, 0.0);
     mRenderer->AddActor(mImageActor);
+    mImageActor->SetInputData(mImageData);
     mImageActor->SetVisibility(false);
 
     mRenderWindow->AddRenderer(mRenderer);
     setRenderWindow(mRenderWindow);
+}
+
+void SliceViewWidget::ensureImageDataAllocated(int width, int height, double spacingX, double spacingY)
+{
+    int dims[3] = {0, 0, 0};
+    double oldSpacing[3] = {1.0, 1.0, 1.0};
+
+    if (mImageData) {
+        mImageData->GetDimensions(dims);
+        mImageData->GetSpacing(oldSpacing);
+    }
+
+    bool needReallocate = false;
+
+    if (!mImageData       ||
+        dims[0] != width  ||
+        dims[1] != height ||
+        dims[2] != 1      ||
+        mImageData->GetScalarType() != VTK_UNSIGNED_CHAR) {
+        needReallocate = true;
+    }
+
+    if (needReallocate) {
+        mImageData->Initialize();
+        mImageData->SetDimensions(width, height, 1);
+        mImageData->AllocateScalars(VTK_UNSIGNED_CHAR, 1);
+    }
+
+    if (oldSpacing[0] != spacingX || oldSpacing[1] != spacingY) {
+        mImageData->SetSpacing(spacingX, spacingY, 1.0);
+    }
 }
