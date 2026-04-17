@@ -69,6 +69,7 @@ void MainWindow::setupUi()
     leftLayout->addStretch();
 
     mWorkSpaceWidget = new WorkSpaceWidget(contentContainer);
+    mWorkSpaceWidget->setViewerSession(mViewerSession);
     mThumbnailPanel = new ThumbnailPanel(contentContainer);
 
     contentLayout->addWidget(leftContainer);

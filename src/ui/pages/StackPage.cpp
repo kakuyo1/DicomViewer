@@ -1,8 +1,10 @@
 #include "StackPage.h"
 
-#include <QFrame>
-#include <QLabel>
 #include <QVBoxLayout>
+
+#include "core/model/volume/VolumeData.h"
+#include "services/state/ViewerSession.h"
+#include "ui/widgets/SliceViewWidget.h"
 
 StackPage::StackPage(QWidget *parent)
     : QWidget(parent)
@@ -20,19 +22,50 @@ void StackPage::setupUi()
     auto *rootLayout = new QVBoxLayout(this);
     rootLayout->setContentsMargins(0, 0, 0, 0);
 
-    auto *placeholderFrame = new QFrame(this);
-    placeholderFrame->setFrameShape(QFrame::Box);
-    placeholderFrame->setMinimumSize(640, 480);
+    mSliceViewWidget = new SliceViewWidget(this);
+    mSliceViewWidget->setMinimumSize(640, 480);
+    rootLayout->addWidget(mSliceViewWidget);
+}
 
-    auto *frameLayout = new QVBoxLayout(placeholderFrame);
-    frameLayout->setContentsMargins(16, 16, 16, 16);
+void StackPage::setViewerSession(ViewerSession *viewerSession)
+{
+    if (mViewerSession == viewerSession) {
+        return;
+    }
 
-    auto *placeholderLabel = new QLabel(QStringLiteral("StackPage"), placeholderFrame);
-    placeholderLabel->setAlignment(Qt::AlignCenter);
+    if (mViewerSession != nullptr) {
+        disconnect(mViewerSession, nullptr, this, nullptr);
+    }
 
-    frameLayout->addStretch();
-    frameLayout->addWidget(placeholderLabel);
-    frameLayout->addStretch();
+    mViewerSession = viewerSession;
+    if (mViewerSession != nullptr) {
+        connect(mViewerSession, &ViewerSession::sessionChanged, this, &StackPage::refreshFromSession);
+        connect(mViewerSession, &ViewerSession::sessionCleared, this, &StackPage::clearDisplay);
+    }
 
-    rootLayout->addWidget(placeholderFrame);
+    refreshFromSession();
+}
+
+void StackPage::refreshFromSession()
+{
+    if (mSliceViewWidget == nullptr || mViewerSession == nullptr) {
+        return;
+    }
+
+    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        clearDisplay();
+        return;
+    }
+
+    /** @note 默认选择中间的切片展示，比较符合用户习惯 */
+    const int defaultSliceIndex = volumeData->depth / 2;
+    mSliceViewWidget->showAxialSlice(*volumeData, defaultSliceIndex);
+}
+
+void StackPage::clearDisplay()
+{
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->clearDisplay();
+    }
 }

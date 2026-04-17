@@ -1,5 +1,7 @@
 #include "WorkSpaceWidget.h"
 
+#include "services/state/ViewerSession.h"
+
 WorkSpaceWidget::WorkSpaceWidget(QWidget *parent)
     : QStackedWidget(parent)
 {
@@ -18,4 +20,12 @@ void WorkSpaceWidget::setupUi()
     mStackPage = new StackPage(this);
     addWidget(mStackPage);
     setCurrentWidget(mStackPage);
+}
+
+void WorkSpaceWidget::setViewerSession(ViewerSession *viewerSession)
+{
+    mViewerSession = viewerSession;
+    if (mStackPage != nullptr) {
+        mStackPage->setViewerSession(mViewerSession);
+    }
 }

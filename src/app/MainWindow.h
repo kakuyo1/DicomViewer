@@ -22,6 +22,7 @@ public:
 
 private:
     void setupUi();
+    void setupConnects();
     void handleOpenFolderRequested();
     void handleImportStarted();
     void handleImportCancelled();
@@ -30,12 +31,13 @@ private:
     void setImportBusy(bool busy);
 
 private:
-    ImportController *mImportController = nullptr;
-    ViewerSession *mViewerSession = nullptr;
-    TitleBarWidget * mTitleBar        = nullptr;
-    StackToolBar   * mStackToolBar    = nullptr;
-    ViewModeBar    * mViewModeBar     = nullptr;
-    WorkSpaceWidget* mWorkSpaceWidget = nullptr;
-    ThumbnailPanel * mThumbnailPanel  = nullptr;
+    ImportController * mImportController = nullptr;
+    ViewerSession    * mViewerSession    = nullptr;
+    TitleBarWidget   * mTitleBar         = nullptr;
+    StackToolBar     * mStackToolBar     = nullptr;
+    ViewModeBar      * mViewModeBar      = nullptr;
+    WorkSpaceWidget  * mWorkSpaceWidget  = nullptr;
+    ThumbnailPanel   * mThumbnailPanel   = nullptr;
+
     bool mImportInProgress = false;
 };
