@@ -87,6 +87,12 @@ void MainWindow::setupConnects()
 {
     connect(mTitleBar, &TitleBarWidget::openFolderRequested,       this, &MainWindow::handleOpenFolderRequested);
 
+    connect(mStackToolBar, &StackToolBar::toolModeChanged,          mWorkSpaceWidget, &WorkSpaceWidget::setStackToolMode);
+    connect(mStackToolBar, &StackToolBar::invertTriggered,          mWorkSpaceWidget, &WorkSpaceWidget::triggerStackInvert);
+    connect(mStackToolBar, &StackToolBar::flipHorizontalTriggered,  mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipHorizontal);
+    connect(mStackToolBar, &StackToolBar::flipVerticalTriggered,    mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipVertical);
+    connect(mStackToolBar, &StackToolBar::resetTriggered,           mWorkSpaceWidget, &WorkSpaceWidget::resetStackView);
+
     connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);
     connect(mImportController, &ImportController::importFailed,    this, &MainWindow::handleImportFailed);

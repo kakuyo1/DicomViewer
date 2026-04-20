@@ -35,7 +35,7 @@ unsigned char mapWindowLevel(qint16 value, double windowCenter, double windowWid
     }
 
     const double normalized = (static_cast<double>(value) - lower) / (upper - lower); // [0,1]
-    const double clamped = std::clamp(normalized, 0.0, 1.0);
+    const double clamped    = std::clamp(normalized, 0.0, 1.0);
     return static_cast<unsigned char>(clamped * 255.0); // [0, 255]
 }
 
@@ -58,6 +58,9 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         clearDisplay();
         return;
     }
+
+    mCurrentVolumeData = &volumeData;
+    mCurrentSliceIndex = sliceIndex;
 
     const int width           = volumeData.width;
     const int height          = volumeData.height;
@@ -82,7 +85,8 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
     // 填充图片像素
     unsigned char *buffer = static_cast<unsigned char *>(mImageData->GetScalarPointer(0, 0, 0));
     for (int y = 0; y < height; ++y) {
-        const qint16 *srcRow = volumeData.voxels.data() + sliceOffset + y * width;
+        const int sampleY    = mFlipVerticalEnabled ? (height - 1 - y) : y;
+        const qint16 *srcRow = volumeData.voxels.data() + sliceOffset + sampleY * width;
         /**
          *  @note DICOM坐标系原点在左上角
          *        VTK坐标系原点在左下角
@@ -91,12 +95,17 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         unsigned char *dstRow = buffer + (height - 1 - y) * width;
 
         for (int x = 0; x < width; ++x) {
-            dstRow[x] = mapWindowLevel(
-                srcRow[x],
+            const int sampleX       = mFlipHorizontalEnabled ? (width - 1 - x) : x;
+            unsigned char grayValue = mapWindowLevel(
+                srcRow[sampleX],
                 volumeData.windowCenter,
                 volumeData.windowWidth,
                 sliceMin,
                 sliceMax);
+            if (mInvertEnabled) {
+                grayValue = static_cast<unsigned char>(255 - grayValue);
+            }
+            dstRow[x] = grayValue;
         }
     }
 
@@ -110,6 +119,8 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
 
 void SliceViewWidget::clearDisplay()
 {
+    mCurrentVolumeData = nullptr;
+    mCurrentSliceIndex = -1;
     if (mImageActor != nullptr) {
         mImageActor->SetVisibility(false);
     }
@@ -137,6 +148,46 @@ void SliceViewWidget::wheelEvent(QWheelEvent *event)
 
     emit sliceScrollRequested(-steps);
     event->accept();
+}
+
+void SliceViewWidget::setToolMode(StackToolMode mode)
+{
+    mToolMode = mode;
+}
+
+void SliceViewWidget::setInvertEnabled(bool enabled)
+{
+    mInvertEnabled = enabled;
+    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
+        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
+    }
+}
+
+void SliceViewWidget::setFlipHorizontalEnabled(bool enabled)
+{
+    mFlipHorizontalEnabled = enabled;
+    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
+        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
+    }
+}
+
+void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
+{
+    mFlipVerticalEnabled = enabled;
+    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
+        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
+    }
+}
+
+void SliceViewWidget::resetViewState()
+{
+    mInvertEnabled         = false;
+    mFlipHorizontalEnabled = false;
+    mFlipVerticalEnabled   = false;
+
+    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
+        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
+    }
 }
 
 void SliceViewWidget::setupVtkPipeline()

@@ -3,6 +3,7 @@
 #include <QStackedWidget>
 
 #include "../pages/StackPage.h"
+#include "ui/toolbars/StackToolMode.h"
 
 class ViewerSession;
 
@@ -15,6 +16,11 @@ public:
     ~WorkSpaceWidget();
 
     void setViewerSession(ViewerSession *viewerSession);
+    void setStackToolMode(StackToolMode mode);
+    void triggerStackInvert();
+    void triggerStackFlipHorizontal();
+    void triggerStackFlipVertical();
+    void resetStackView();
 
 private:
     void setupUi();

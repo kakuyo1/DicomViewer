@@ -50,6 +50,49 @@ void StackPage::setViewerSession(ViewerSession *viewerSession)
     refreshFromSession();
 }
 
+void StackPage::setToolMode(StackToolMode mode)
+{
+    mToolMode = mode;
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->setToolMode(mode);
+    }
+}
+
+void StackPage::toggleInvert()
+{
+    mInvertEnabled = !mInvertEnabled;
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->setInvertEnabled(mInvertEnabled);
+    }
+}
+
+void StackPage::toggleFlipHorizontal()
+{
+    mFlipHorizontalEnabled = !mFlipHorizontalEnabled;
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->setFlipHorizontalEnabled(mFlipHorizontalEnabled);
+    }
+}
+
+void StackPage::toggleFlipVertical()
+{
+    mFlipVerticalEnabled = !mFlipVerticalEnabled;
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->setFlipVerticalEnabled(mFlipVerticalEnabled);
+    }
+}
+
+void StackPage::resetView()
+{
+    mInvertEnabled         = false;
+    mFlipHorizontalEnabled = false;
+    mFlipVerticalEnabled   = false;
+
+    if (mSliceViewWidget != nullptr) {
+        mSliceViewWidget->resetViewState();
+    }
+}
+
 void StackPage::refreshFromSession()
 {
     if (mSliceViewWidget == nullptr || mViewerSession == nullptr) {

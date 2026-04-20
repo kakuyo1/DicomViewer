@@ -29,3 +29,38 @@ void WorkSpaceWidget::setViewerSession(ViewerSession *viewerSession)
         mStackPage->setViewerSession(mViewerSession);
     }
 }
+
+void WorkSpaceWidget::setStackToolMode(StackToolMode mode)
+{
+    if (mStackPage != nullptr) {
+        mStackPage->setToolMode(mode);
+    }
+}
+
+void WorkSpaceWidget::triggerStackInvert()
+{
+    if (mStackPage != nullptr) {
+        mStackPage->toggleInvert();
+    }
+}
+
+void WorkSpaceWidget::triggerStackFlipHorizontal()
+{
+    if (mStackPage != nullptr) {
+        mStackPage->toggleFlipHorizontal();
+    }
+}
+
+void WorkSpaceWidget::triggerStackFlipVertical()
+{
+    if (mStackPage != nullptr) {
+        mStackPage->toggleFlipVertical();
+    }
+}
+
+void WorkSpaceWidget::resetStackView()
+{
+    if (mStackPage != nullptr) {
+        mStackPage->resetView();
+    }
+}
