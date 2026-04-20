@@ -2,18 +2,48 @@
 
 #include <algorithm>
 
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QWheelEvent>
 
 #include <vtkCamera.h>
 #include <vtkGenericOpenGLRenderWindow.h>
 #include <vtkImageActor.h>
 #include <vtkImageData.h>
+#include <vtkInteractorStyleUser.h>
+#include <vtkObjectFactory.h>
 #include <vtkRenderer.h>
+#include <vtkRenderWindowInteractor.h>
 
 #include "core/model/volume/VolumeData.h"
 
 namespace
 {
+
+constexpr double kMinimumInteractiveWindowWidth = 20.0;
+
+/** @note 空操作 interactor style */
+class StackNoOpInteractorStyle : public vtkInteractorStyleUser
+{
+public:
+    static StackNoOpInteractorStyle *New();
+    vtkTypeMacro(StackNoOpInteractorStyle, vtkInteractorStyleUser);
+
+    void OnLeftButtonDown() override {}
+    void OnLeftButtonUp() override {}
+    void OnMiddleButtonDown() override {}
+    void OnMiddleButtonUp() override {}
+    void OnRightButtonDown() override {}
+    void OnRightButtonUp() override {}
+    void OnMouseMove() override {}
+    void OnMouseWheelForward() override {}
+    void OnMouseWheelBackward() override {}
+    void OnChar() override {}
+    void OnKeyPress() override {}
+    void OnKeyRelease() override {}
+};
+
+vtkStandardNewMacro(StackNoOpInteractorStyle);
 
 /** @note 把原始的 16 位灰度值/HU（qint16）映射成显示用的 8 位灰度值（unsigned char，范围 0~255）*/
 unsigned char mapWindowLevel(qint16 value, double windowCenter, double windowWidth, qint16 sliceMin, qint16 sliceMax)
@@ -39,6 +69,21 @@ unsigned char mapWindowLevel(qint16 value, double windowCenter, double windowWid
     return static_cast<unsigned char>(clamped * 255.0); // [0, 255]
 }
 
+bool isPaddingPixel(qint16 value, const VolumeData &volumeData)
+{
+    if (!volumeData.hasPixelPaddingValue) {
+        return false;
+    }
+
+    if (!volumeData.hasPixelPaddingRangeLimit) {
+        return value == volumeData.pixelPaddingValue;
+    }
+
+    const qint16 paddingMin = std::min(volumeData.pixelPaddingValue, volumeData.pixelPaddingRangeLimit);
+    const qint16 paddingMax = std::max(volumeData.pixelPaddingValue, volumeData.pixelPaddingRangeLimit);
+    return value >= paddingMin && value <= paddingMax;
+}
+
 } // namespace
 
 SliceViewWidget::SliceViewWidget(QWidget *parent)
@@ -59,13 +104,31 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         return;
     }
 
+    const bool volumeChanged = (mCurrentVolumeData != &volumeData);
     mCurrentVolumeData = &volumeData;
     mCurrentSliceIndex = sliceIndex;
+
+    if (volumeChanged || !mWindowLevelInitialized) {
+        resetWindowLevelToDefault();
+    }
+
+    renderCurrentSlice();
+}
+
+void SliceViewWidget::renderCurrentSlice()
+{
+    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSliceIndex < 0
+        || mCurrentSliceIndex >= mCurrentVolumeData->depth) {
+        clearDisplay();
+        return;
+    }
+
+    const VolumeData &volumeData = *mCurrentVolumeData;
 
     const int width           = volumeData.width;
     const int height          = volumeData.height;
     const int slicePixelCount = width * height;
-    const int sliceOffset     = sliceIndex * slicePixelCount;
+    const int sliceOffset     = mCurrentSliceIndex * slicePixelCount;
     if (sliceOffset < 0 || sliceOffset + slicePixelCount > volumeData.voxels.size()) {
         clearDisplay();
         return;
@@ -76,9 +139,30 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
     const auto sliceEnd   = sliceBegin + slicePixelCount;
 
     // 找到最小灰度值和最大灰度值 -> 用于mapWindowLevel的回退
-    const auto [sliceMinIt, sliceMaxIt] = std::minmax_element(sliceBegin, sliceEnd);
-    const qint16 sliceMin = (sliceMinIt != sliceEnd) ? *sliceMinIt : 0;
-    const qint16 sliceMax = (sliceMaxIt != sliceEnd) ? *sliceMaxIt : 0;
+    qint16 sliceMin = 0;
+    qint16 sliceMax = 0;
+    bool hasNonPaddingPixel = false;
+    // 排除填充像素影响窗宽窗位
+    for (auto it = sliceBegin; it != sliceEnd; ++it) {
+        if (isPaddingPixel(*it, volumeData)) {
+            continue;
+        }
+
+        if (!hasNonPaddingPixel) {
+            sliceMin = *it;
+            sliceMax = *it;
+            hasNonPaddingPixel = true;
+            continue;
+        }
+
+        sliceMin = std::min(sliceMin, *it);
+        sliceMax = std::max(sliceMax, *it);
+    }
+
+    if (!hasNonPaddingPixel) {
+        sliceMin = 0;
+        sliceMax = 0;
+    }
 
     ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
 
@@ -96,14 +180,19 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
 
         for (int x = 0; x < width; ++x) {
             const int sampleX       = mFlipHorizontalEnabled ? (width - 1 - x) : x;
-            unsigned char grayValue = mapWindowLevel(
-                srcRow[sampleX],
-                volumeData.windowCenter,
-                volumeData.windowWidth,
-                sliceMin,
-                sliceMax);
-            if (mInvertEnabled) {
-                grayValue = static_cast<unsigned char>(255 - grayValue);
+            const qint16 pixelValue = srcRow[sampleX];
+            unsigned char grayValue = 0;
+            // 只有非填充像素才进行窗宽窗位映射
+            if (!isPaddingPixel(pixelValue, volumeData)) {
+                grayValue = mapWindowLevel(
+                    pixelValue,
+                    mCurrentWindowCenter,
+                    mCurrentWindowWidth,
+                    sliceMin,
+                    sliceMax);
+                if (mInvertEnabled) {
+                    grayValue = static_cast<unsigned char>(255 - grayValue);
+                }
             }
             dstRow[x] = grayValue;
         }
@@ -127,6 +216,77 @@ void SliceViewWidget::clearDisplay()
     if (mRenderWindow != nullptr) {
         mRenderWindow->Render();
     }
+}
+
+void SliceViewWidget::mousePressEvent(QMouseEvent *event)
+{
+    if (event == nullptr) {
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::WindowLevel) {
+        mMouseDragActive       = true;
+        mMouseDragStartPos     = event->pos();
+        mDragStartWindowCenter = mCurrentWindowCenter;
+        mDragStartWindowWidth  = std::max(kMinimumInteractiveWindowWidth, mCurrentWindowWidth);
+        event->accept();
+        return;
+    }
+
+    event->accept();
+}
+
+void SliceViewWidget::keyPressEvent(QKeyEvent *event)
+{
+    if (event != nullptr) {
+        event->accept();
+    }
+}
+
+void SliceViewWidget::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event != nullptr) {
+        event->accept();
+    }
+}
+
+void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
+{
+    if (event == nullptr) {
+        return;
+    }
+
+    if (mMouseDragActive && mToolMode == StackToolMode::WindowLevel) {
+        const QPoint delta = event->pos() - mMouseDragStartPos;
+
+        constexpr double kWindowWidthSensitivity  = 1.0;
+        constexpr double kWindowCenterSensitivity = 1.0;
+
+        mCurrentWindowWidth  = std::max(kMinimumInteractiveWindowWidth, mDragStartWindowWidth + delta.x() * kWindowWidthSensitivity);
+        mCurrentWindowCenter = mDragStartWindowCenter - delta.y() * kWindowCenterSensitivity;
+        mWindowLevelInitialized = true;
+
+        renderCurrentSlice();
+        event->accept();
+        return;
+    }
+
+    event->accept();
+}
+
+void SliceViewWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event == nullptr) {
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mMouseDragActive) {
+        mMouseDragActive = false;
+        event->accept();
+        return;
+    }
+
+    event->accept();
 }
 
 void SliceViewWidget::wheelEvent(QWheelEvent *event)
@@ -158,25 +318,19 @@ void SliceViewWidget::setToolMode(StackToolMode mode)
 void SliceViewWidget::setInvertEnabled(bool enabled)
 {
     mInvertEnabled = enabled;
-    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
-        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
-    }
+    renderCurrentSlice();
 }
 
 void SliceViewWidget::setFlipHorizontalEnabled(bool enabled)
 {
     mFlipHorizontalEnabled = enabled;
-    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
-        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
-    }
+    renderCurrentSlice();
 }
 
 void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
 {
     mFlipVerticalEnabled = enabled;
-    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
-        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
-    }
+    renderCurrentSlice();
 }
 
 void SliceViewWidget::resetViewState()
@@ -184,10 +338,9 @@ void SliceViewWidget::resetViewState()
     mInvertEnabled         = false;
     mFlipHorizontalEnabled = false;
     mFlipVerticalEnabled   = false;
-
-    if (mCurrentVolumeData != nullptr && mCurrentSliceIndex >= 0) {
-        showAxialSlice(*mCurrentVolumeData, mCurrentSliceIndex);
-    }
+    mMouseDragActive       = false;
+    resetWindowLevelToDefault();
+    renderCurrentSlice();
 }
 
 void SliceViewWidget::setupVtkPipeline()
@@ -204,6 +357,22 @@ void SliceViewWidget::setupVtkPipeline()
 
     mRenderWindow->AddRenderer(mRenderer);
     setRenderWindow(mRenderWindow);
+    installNoOpInteractorStyle();
+}
+
+void SliceViewWidget::installNoOpInteractorStyle()
+{
+    if (mRenderWindow == nullptr) {
+        return;
+    }
+
+    vtkRenderWindowInteractor *interactor = mRenderWindow->GetInteractor();
+    if (interactor == nullptr) {
+        return;
+    }
+
+    vtkSmartPointer<StackNoOpInteractorStyle> style = vtkSmartPointer<StackNoOpInteractorStyle>::New();
+    interactor->SetInteractorStyle(style);
 }
 
 void SliceViewWidget::ensureImageDataAllocated(int width, int height, double spacingX, double spacingY)
@@ -235,4 +404,18 @@ void SliceViewWidget::ensureImageDataAllocated(int width, int height, double spa
     if (oldSpacing[0] != spacingX || oldSpacing[1] != spacingY) {
         mImageData->SetSpacing(spacingX, spacingY, 1.0);
     }
+}
+
+void SliceViewWidget::resetWindowLevelToDefault()
+{
+    if (mCurrentVolumeData == nullptr) {
+        mCurrentWindowCenter  = 0.0;
+        mCurrentWindowWidth   = 0.0;
+        mWindowLevelInitialized = false;
+        return;
+    }
+
+    mCurrentWindowCenter  = mCurrentVolumeData->windowCenter;
+    mCurrentWindowWidth   = mCurrentVolumeData->windowWidth;
+    mWindowLevelInitialized = true;
 }

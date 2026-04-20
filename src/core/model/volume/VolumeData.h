@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QtGlobal>
 #include <QString>
 #include <QVector>
 
@@ -22,6 +23,11 @@ struct VolumeData
 
     double windowCenter               = 0.0;
     double windowWidth                = 0.0;
+
+    bool hasPixelPaddingValue         = false;
+    qint16 pixelPaddingValue          = 0;          // 无效像素的基准值
+    bool hasPixelPaddingRangeLimit    = false;
+    qint16 pixelPaddingRangeLimit     = 0;          // 无效像素范围的另一端
 
     bool usedSliceThicknessAsSpacingZ = true;
     QString spacingZSource;

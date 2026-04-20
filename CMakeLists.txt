@@ -12,6 +12,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Concurrent)
 # VTK
 find_package(VTK CONFIG REQUIRED COMPONENTS
     CommonCore
+    InteractionStyle
     RenderingCore
     RenderingOpenGL2
     GUISupportQt
@@ -48,6 +49,7 @@ target_link_libraries(DicomViewer
         Qt${QT_VERSION_MAJOR}::Concurrent
         DCMTK::dcmdata
         VTK::CommonCore
+        VTK::InteractionStyle
         VTK::RenderingCore
         VTK::RenderingOpenGL2
         VTK::GUISupportQt

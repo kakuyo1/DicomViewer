@@ -13,6 +13,31 @@
 namespace
 {
 
+bool readStoredPixelValue(DcmDataset *dataset, const DcmTagKey &tagKey, Uint16 pixelRepresentation, Sint16 *outValue)
+{
+    if (dataset == nullptr || outValue == nullptr) {
+        return false;
+    }
+
+    Uint16 unsignedValue = 0;
+    if (dataset->findAndGetUint16(tagKey, unsignedValue).good()) {
+        if (pixelRepresentation == 0) {
+            *outValue = static_cast<Sint16>(unsignedValue);
+        } else {
+            std::memcpy(outValue, &unsignedValue, sizeof(Sint16));
+        }
+        return true;
+    }
+
+    Sint16 signedValue = 0;
+    if (dataset->findAndGetSint16(tagKey, signedValue).good()) {
+        *outValue = signedValue;
+        return true;
+    }
+
+    return false;
+}
+
 QString readStringValue(DcmDataset *dataset, const DcmTagKey &tagKey)
 {
     OFString value;
@@ -203,6 +228,20 @@ std::optional<VolumeData> VolumeBuilder::build(
             volumeData.rescaleSlope                 = readFloat64Value(dataset, DCM_RescaleSlope    , 1.0);
             volumeData.rescaleIntercept             = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
 
+            Sint16 rawPaddingValue = 0;
+            if (readStoredPixelValue(dataset, DCM_PixelPaddingValue, pixelRepresentation, &rawPaddingValue)) {
+                const double paddingHu          = static_cast<double>(rawPaddingValue) * volumeData.rescaleSlope + volumeData.rescaleIntercept;
+                volumeData.hasPixelPaddingValue = true;
+                volumeData.pixelPaddingValue    = static_cast<qint16>(std::lround(paddingHu));
+            }
+
+            Sint16 rawPaddingRangeLimit = 0;
+            if (readStoredPixelValue(dataset, DCM_PixelPaddingRangeLimit, pixelRepresentation, &rawPaddingRangeLimit)) {
+                const double paddingRangeHu          = static_cast<double>(rawPaddingRangeLimit) * volumeData.rescaleSlope + volumeData.rescaleIntercept;
+                volumeData.hasPixelPaddingRangeLimit = true;
+                volumeData.pixelPaddingRangeLimit    = static_cast<qint16>(std::lround(paddingRangeHu));
+            }
+
             if (hasGeometrySpacing) { // 优先采用几何信息推导的spacingZ
                 volumeData.spacingZ = derivedSpacingZ;
                 volumeData.usedSliceThicknessAsSpacingZ = false;
@@ -226,6 +265,10 @@ std::optional<VolumeData> VolumeBuilder::build(
             }
             if (!slice.hasWindowCenter || !slice.hasWindowWidth) {
                 localWarnings.push_back(QStringLiteral("Window center/width are incomplete; default values may be used."));
+            }
+            if (volumeData.hasPixelPaddingRangeLimit && !volumeData.hasPixelPaddingValue) {
+                localWarnings.push_back(QStringLiteral("PixelPaddingRangeLimit is present without PixelPaddingValue; padding suppression is disabled."));
+                volumeData.hasPixelPaddingRangeLimit = false;
             }
         } else if (volumeData.width != static_cast<int>(columns)
                    || volumeData.height != static_cast<int>(rows)
