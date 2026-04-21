@@ -1,6 +1,7 @@
 #include "SliceViewWidget.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -21,8 +22,10 @@ namespace
 {
 
 constexpr double kMinimumInteractiveWindowWidth = 20.0;
+constexpr double kMinimumZoomFactor             = 0.1;
+constexpr double kMaximumZoomFactor             = 20.0;
 
-/** @note 空操作 interactor style */
+/** @note 空操作 interactor style，用来清空原生VTK Interactor的键鼠操作，不能直接disable interactor,因为它包含VTK的事件循环，会直接黑屏！ */
 class StackNoOpInteractorStyle : public vtkInteractorStyleUser
 {
 public:
@@ -112,6 +115,12 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         resetWindowLevelToDefault();
     }
 
+    if (volumeChanged) {
+        mPanOffset              = QPointF(0.0, 0.0);
+        mZoomFactor             = 1.0;
+        mCameraStateInitialized = false;
+    }
+
     renderCurrentSlice();
 }
 
@@ -164,7 +173,10 @@ void SliceViewWidget::renderCurrentSlice()
         sliceMax = 0;
     }
 
-    ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
+    const bool geometryChanged = ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
+    if (geometryChanged) {
+        mCameraStateInitialized = false;
+    }
 
     // 填充图片像素
     unsigned char *buffer = static_cast<unsigned char *>(mImageData->GetScalarPointer(0, 0, 0));
@@ -200,9 +212,21 @@ void SliceViewWidget::renderCurrentSlice()
 
     mImageData->Modified();
     mImageActor->SetVisibility(true);
-    mRenderer->ResetCamera();
-    /** @note 开启平行投影，避免透视变形 */
-    mRenderer->GetActiveCamera()->ParallelProjectionOn();
+
+    if (mRenderer != nullptr) {
+        vtkCamera *camera = mRenderer->GetActiveCamera();
+        if (camera != nullptr) {
+            camera->ParallelProjectionOn();
+            if (!mCameraStateInitialized) {
+                mRenderer->ResetCamera();
+                camera->GetFocalPoint(mBaseCameraFocalPoint);
+                camera->GetPosition(mBaseCameraPosition);
+                mBaseParallelScale      = camera->GetParallelScale();
+                mCameraStateInitialized = true;
+            }
+            applyViewStateToCamera();
+        }
+    }
     mRenderWindow->Render();
 }
 
@@ -210,6 +234,8 @@ void SliceViewWidget::clearDisplay()
 {
     mCurrentVolumeData = nullptr;
     mCurrentSliceIndex = -1;
+    mMouseDragActive   = false;
+
     if (mImageActor != nullptr) {
         mImageActor->SetVisibility(false);
     }
@@ -229,6 +255,22 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
         mMouseDragStartPos     = event->pos();
         mDragStartWindowCenter = mCurrentWindowCenter;
         mDragStartWindowWidth  = std::max(kMinimumInteractiveWindowWidth, mCurrentWindowWidth);
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Pan) {
+        mMouseDragActive    = true;
+        mMouseDragStartPos  = event->pos();
+        mDragStartPanOffset = mPanOffset;
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Zoom) {
+        mMouseDragActive     = true;
+        mMouseDragStartPos   = event->pos();
+        mDragStartZoomFactor = mZoomFactor;
         event->accept();
         return;
     }
@@ -262,11 +304,44 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         constexpr double kWindowWidthSensitivity  = 1.0;
         constexpr double kWindowCenterSensitivity = 1.0;
 
-        mCurrentWindowWidth  = std::max(kMinimumInteractiveWindowWidth, mDragStartWindowWidth + delta.x() * kWindowWidthSensitivity);
-        mCurrentWindowCenter = mDragStartWindowCenter - delta.y() * kWindowCenterSensitivity;
+        mCurrentWindowWidth     = std::max(kMinimumInteractiveWindowWidth, mDragStartWindowWidth + delta.x() * kWindowWidthSensitivity);
+        mCurrentWindowCenter    = mDragStartWindowCenter - delta.y() * kWindowCenterSensitivity;
         mWindowLevelInitialized = true;
 
         renderCurrentSlice();
+        event->accept();
+        return;
+    }
+
+    if (mMouseDragActive && mToolMode == StackToolMode::Pan) {
+        const QSize widgetSize = size();
+        if (widgetSize.width() > 0 && widgetSize.height() > 0 && mCameraStateInitialized) {
+            const QPoint delta = event->pos() - mMouseDragStartPos;
+            // 像素位移delta  ->  世界坐标位移
+            /** @note  ParallelScale = 可视世界高度的一半  -> 可视世界总高度 = 2 * ParallelScale */
+            const double viewHeightWorld = 2.0 * (mBaseParallelScale / std::max(kMinimumZoomFactor, mZoomFactor));
+            /** @note 屏幕窗口的宽高比会影响“同样的高度对应多少宽度” */
+            const double viewWidthWorld = viewHeightWorld * static_cast<double>(widgetSize.width()) / static_cast<double>(widgetSize.height());
+            /** @note viewWorld / widgetSize  ->  每个像素对应多少个世界单位, 并且注意VTK 与Qt 的y轴相反 */
+            mPanOffset.setX(mDragStartPanOffset.x() - delta.x() * (viewWidthWorld / static_cast<double>(widgetSize.width())));
+            mPanOffset.setY(mDragStartPanOffset.y() + delta.y() * (viewHeightWorld / static_cast<double>(widgetSize.height())));
+            applyViewStateToCamera();
+            if (mRenderWindow != nullptr) {
+                mRenderWindow->Render();
+            }
+        }
+        event->accept();
+        return;
+    }
+
+    if (mMouseDragActive && mToolMode == StackToolMode::Zoom) {
+        const QPoint delta = event->pos() - mMouseDragStartPos;
+        const double zoomMultiplier = std::pow(1.01, -delta.y());   /** @note 注意Qt中向下为y正方向 */
+        mZoomFactor = std::clamp(mDragStartZoomFactor * zoomMultiplier, kMinimumZoomFactor, kMaximumZoomFactor);
+        applyViewStateToCamera();
+        if (mRenderWindow != nullptr) {
+            mRenderWindow->Render();
+        }
         event->accept();
         return;
     }
@@ -313,6 +388,7 @@ void SliceViewWidget::wheelEvent(QWheelEvent *event)
 void SliceViewWidget::setToolMode(StackToolMode mode)
 {
     mToolMode = mode;
+    mMouseDragActive = false;
 }
 
 void SliceViewWidget::setInvertEnabled(bool enabled)
@@ -335,10 +411,13 @@ void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
 
 void SliceViewWidget::resetViewState()
 {
-    mInvertEnabled         = false;
-    mFlipHorizontalEnabled = false;
-    mFlipVerticalEnabled   = false;
-    mMouseDragActive       = false;
+    mInvertEnabled          = false;
+    mFlipHorizontalEnabled  = false;
+    mFlipVerticalEnabled    = false;
+    mMouseDragActive        = false;
+    mPanOffset              = QPointF(0.0, 0.0);
+    mZoomFactor             = 1.0;
+    mCameraStateInitialized = false;
     resetWindowLevelToDefault();
     renderCurrentSlice();
 }
@@ -375,7 +454,7 @@ void SliceViewWidget::installNoOpInteractorStyle()
     interactor->SetInteractorStyle(style);
 }
 
-void SliceViewWidget::ensureImageDataAllocated(int width, int height, double spacingX, double spacingY)
+bool SliceViewWidget::ensureImageDataAllocated(int width, int height, double spacingX, double spacingY)
 {
     int dims[3] = {0, 0, 0};
     double oldSpacing[3] = {1.0, 1.0, 1.0};
@@ -401,21 +480,49 @@ void SliceViewWidget::ensureImageDataAllocated(int width, int height, double spa
         mImageData->AllocateScalars(VTK_UNSIGNED_CHAR, 1);
     }
 
-    if (oldSpacing[0] != spacingX || oldSpacing[1] != spacingY) {
+    const bool spacingChanged = (oldSpacing[0] != spacingX || oldSpacing[1] != spacingY);
+    if (spacingChanged) {
         mImageData->SetSpacing(spacingX, spacingY, 1.0);
     }
+
+    return needReallocate || spacingChanged;
+}
+
+void SliceViewWidget::applyViewStateToCamera()
+{
+    if (mRenderer == nullptr || !mCameraStateInitialized) {
+        return;
+    }
+
+    vtkCamera *camera = mRenderer->GetActiveCamera();
+    if (camera == nullptr) {
+        return;
+    }
+
+    const double zoomFactor = std::clamp(mZoomFactor, kMinimumZoomFactor, kMaximumZoomFactor);
+    camera->SetFocalPoint(
+        mBaseCameraFocalPoint[0] + mPanOffset.x(),
+        mBaseCameraFocalPoint[1] + mPanOffset.y(),
+        mBaseCameraFocalPoint[2]);
+    camera->SetPosition(
+        mBaseCameraPosition[0] + mPanOffset.x(),
+        mBaseCameraPosition[1] + mPanOffset.y(),
+        mBaseCameraPosition[2]);
+    camera->SetParallelScale(mBaseParallelScale / std::max(kMinimumZoomFactor, mZoomFactor));
+    camera->ParallelProjectionOn();         // 防止ResetCamera又改回透视投影
+    mRenderer->ResetCameraClippingRange();  // 自动调整裁剪范围，使得所有物体都能显示在视图中
 }
 
 void SliceViewWidget::resetWindowLevelToDefault()
 {
     if (mCurrentVolumeData == nullptr) {
-        mCurrentWindowCenter  = 0.0;
-        mCurrentWindowWidth   = 0.0;
+        mCurrentWindowCenter    = 0.0;
+        mCurrentWindowWidth     = 0.0;
         mWindowLevelInitialized = false;
         return;
     }
 
-    mCurrentWindowCenter  = mCurrentVolumeData->windowCenter;
-    mCurrentWindowWidth   = mCurrentVolumeData->windowWidth;
+    mCurrentWindowCenter    = mCurrentVolumeData->windowCenter;
+    mCurrentWindowWidth     = mCurrentVolumeData->windowWidth;
     mWindowLevelInitialized = true;
 }

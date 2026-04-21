@@ -3,6 +3,7 @@
 #include <QVTKOpenGLNativeWidget.h>
 
 #include <QPoint>
+#include <QPointF>
 
 #include <vtkSmartPointer.h>
 
@@ -48,24 +49,39 @@ protected:
 private:
     void setupVtkPipeline();
     void installNoOpInteractorStyle();
-    void ensureImageDataAllocated(int width, int height, double spacingX, double spacingY);
+    bool ensureImageDataAllocated(int width, int height, double spacingX, double spacingY);
+    void applyViewStateToCamera();
     void renderCurrentSlice();
     void resetWindowLevelToDefault();
 
 private:
     const VolumeData *mCurrentVolumeData = nullptr;
     int mCurrentSliceIndex               = -1;
+
     StackToolMode mToolMode              = StackToolMode::Pan;
+
     bool mInvertEnabled                  = false;
+
     bool mFlipHorizontalEnabled          = false;
     bool mFlipVerticalEnabled            = false;
+
     double mCurrentWindowCenter          = 0.0;
     double mCurrentWindowWidth           = 0.0;
-    bool mWindowLevelInitialized         = false;
-    bool mMouseDragActive                = false;
-    QPoint mMouseDragStartPos;
     double mDragStartWindowCenter        = 0.0;
     double mDragStartWindowWidth         = 0.0;
+    bool mWindowLevelInitialized         = false;
+
+    bool mMouseDragActive                = false;
+    QPoint mMouseDragStartPos;
+    QPointF mPanOffset;
+    QPointF mDragStartPanOffset;
+    double mZoomFactor                   = 1.0;
+    double mDragStartZoomFactor          = 1.0;
+
+    bool mCameraStateInitialized         = false;
+    double mBaseCameraFocalPoint[3]      = {0.0, 0.0, 0.0};
+    double mBaseCameraPosition[3]        = {0.0, 0.0, 1.0};
+    double mBaseParallelScale            = 1.0;                 // 平行投影下的 ParallelScale：可视世界高度的一半
 
     vtkSmartPointer<vtkGenericOpenGLRenderWindow> mRenderWindow;
     vtkSmartPointer<vtkRenderer>                  mRenderer;
