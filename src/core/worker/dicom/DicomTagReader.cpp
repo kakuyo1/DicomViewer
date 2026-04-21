@@ -160,6 +160,13 @@ DicomReadResult DicomTagReader::readSliceInfo(const QString &filePath) const
     // Get Tags
     DicomSliceInfo sliceInfo;
     sliceInfo.filePath                   = filePath;
+    sliceInfo.patientName                = readStringValue(dataset, DCM_PatientName);
+    sliceInfo.patientId                  = readStringValue(dataset, DCM_PatientID);
+    sliceInfo.patientSex                 = readStringValue(dataset, DCM_PatientSex).toUpper();
+    sliceInfo.patientAge                 = readStringValue(dataset, DCM_PatientAge);
+    sliceInfo.patientBirthDate           = readStringValue(dataset, DCM_PatientBirthDate);
+    sliceInfo.studyDate                  = readStringValue(dataset, DCM_StudyDate);
+    sliceInfo.studyTime                  = readStringValue(dataset, DCM_StudyTime);
     sliceInfo.seriesInstanceUid          = readStringValue(dataset, DCM_SeriesInstanceUID);
     sliceInfo.sopInstanceUid             = readStringValue(dataset, DCM_SOPInstanceUID);
     sliceInfo.seriesDescription          = readStringValue(dataset, DCM_SeriesDescription);
@@ -182,6 +189,12 @@ DicomReadResult DicomTagReader::readSliceInfo(const QString &filePath) const
         return result;
     }
 
+    Sint32 seriesNumber = 0;
+    if (dataset->findAndGetSint32(DCM_SeriesNumber, seriesNumber).good()) {
+        sliceInfo.seriesNumber  = static_cast<int>(seriesNumber);
+        sliceInfo.hasSeriesNumber = true;
+    }
+
     Sint32 instanceNumber = 0;
     if (dataset->findAndGetSint32(DCM_InstanceNumber, instanceNumber).good()) {
         sliceInfo.instanceNumber    = static_cast<int>(instanceNumber);
@@ -189,6 +202,9 @@ DicomReadResult DicomTagReader::readSliceInfo(const QString &filePath) const
     }
 
     sliceInfo.hasSliceThickness = readFloatValue(dataset, DCM_SliceThickness, &sliceInfo.sliceThickness);
+    sliceInfo.hasSliceLocation  = readFloatValue(dataset, DCM_SliceLocation, &sliceInfo.sliceLocation);
+    sliceInfo.hasKvp            = readFloatValue(dataset, DCM_KVP, &sliceInfo.kvp);
+    sliceInfo.hasTubeCurrentMa  = readFloatValue(dataset, DCM_XRayTubeCurrent, &sliceInfo.tubeCurrentMa);
     sliceInfo.hasWindowCenter   = readFloatValue(dataset, DCM_WindowCenter  , &sliceInfo.windowCenter);
     sliceInfo.hasWindowWidth    = readFloatValue(dataset, DCM_WindowWidth   , &sliceInfo.windowWidth);
 

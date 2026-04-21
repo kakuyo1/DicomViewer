@@ -19,7 +19,10 @@
 #include <vtkRenderer.h>
 #include <vtkRenderWindowInteractor.h>
 
+#include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
+#include "ui/model/OverlayInfo.h"
+#include "ui/widgets/ImageOverlayWidget.h"
 
 namespace
 {
@@ -28,6 +31,46 @@ constexpr double kMinimumInteractiveWindowWidth = 20.0;
 constexpr double kMinimumZoomFactor             = 0.1;
 constexpr double kMaximumZoomFactor             = 20.0;
 constexpr double kMeasurementTickSpacingMm      = 20.0;
+
+QString formatDicomDate(const QString &rawDate)
+{
+    if (rawDate.size() != 8) {
+        return rawDate;
+    }
+
+    return QStringLiteral("%1-%2-%3").arg(rawDate.mid(0, 4), rawDate.mid(4, 2), rawDate.mid(6, 2));
+}
+
+QString formatDicomTime(const QString &rawTime)
+{
+    if (rawTime.size() != 6) {
+        return rawTime;
+    }
+
+    return QStringLiteral("%1:%2:%3").arg(rawTime.mid(0, 2), rawTime.mid(2, 2), rawTime.mid(4, 2));
+}
+
+QString buildSexAgeText(const DicomSliceInfo &sliceInfo)
+{
+    QStringList parts;
+    if (!sliceInfo.patientSex.isEmpty()) {
+        parts.push_back(sliceInfo.patientSex);
+    }
+    if (!sliceInfo.patientAge.isEmpty()) {
+        parts.push_back(sliceInfo.patientAge);
+    }
+    return parts.join(QStringLiteral(" / "));
+}
+
+QString formatSlicePositionText(const DicomSliceInfo &sliceInfo)
+{
+    if (sliceInfo.hasImagePositionPatient) {
+        return QStringLiteral("Location: %1 mm").arg(sliceInfo.imagePositionPatient.z, 0, 'f', 2);
+    } else if (sliceInfo.hasSliceLocation) {
+        return QStringLiteral("Location: %1 mm").arg(sliceInfo.sliceLocation, 0, 'f', 2);
+    }
+    return {};
+}
 
 /** @note 空操作 interactor style，用来清空原生VTK Interactor的键鼠操作，不能直接disable interactor,因为它包含VTK的事件循环，会直接黑屏！ */
 class StackNoOpInteractorStyle : public vtkInteractorStyleUser
@@ -98,6 +141,10 @@ SliceViewWidget::SliceViewWidget(QWidget *parent)
 {
     setupVtkPipeline();
 
+    mImageOverlayWidget = new ImageOverlayWidget(this);
+    mImageOverlayWidget->setGeometry(rect());
+    mImageOverlayWidget->show();
+
     mMeasurementLabel = new QLabel(this);
     mMeasurementLabel->hide();
     mMeasurementLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
@@ -113,17 +160,18 @@ SliceViewWidget::~SliceViewWidget()
 
 }
 
-void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceIndex)
+void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData &volumeData, int sliceIndex)
 {
     if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= volumeData.depth) {
         clearDisplay();
         return;
     }
 
+    mCurrentSeries           = &series;
     const bool volumeChanged = (mCurrentVolumeData != &volumeData);
-    const bool sliceChanged = (mCurrentSliceIndex != sliceIndex);
-    mCurrentVolumeData = &volumeData;
-    mCurrentSliceIndex = sliceIndex;
+    const bool sliceChanged  = (mCurrentSliceIndex != sliceIndex);
+    mCurrentVolumeData       = &volumeData;
+    mCurrentSliceIndex       = sliceIndex;
 
     if (volumeChanged || !mWindowLevelInitialized) {
         resetWindowLevelToDefault();
@@ -244,21 +292,35 @@ void SliceViewWidget::renderCurrentSlice()
             applyViewStateToCamera();
         }
     }
+    updateOverlayInfo();
     mRenderWindow->Render();
 }
 
 void SliceViewWidget::clearDisplay()
 {
+    mCurrentSeries     = nullptr;
     mCurrentVolumeData = nullptr;
     mCurrentSliceIndex = -1;
     mMouseDragActive   = false;
     clearMeasurement();
+    if (mImageOverlayWidget != nullptr) {
+        mImageOverlayWidget->clearOverlay();
+    }
 
     if (mImageActor != nullptr) {
         mImageActor->SetVisibility(false);
     }
     if (mRenderWindow != nullptr) {
         mRenderWindow->Render();
+    }
+}
+
+void SliceViewWidget::resizeEvent(QResizeEvent *event)
+{
+    QVTKOpenGLNativeWidget::resizeEvent(event);
+
+    if (mImageOverlayWidget != nullptr) {
+        mImageOverlayWidget->setGeometry(rect());
     }
 }
 
@@ -426,6 +488,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         const double zoomMultiplier = std::pow(1.01, -delta.y());   /** @note 注意Qt中向下为y正方向 */
         mZoomFactor = std::clamp(mDragStartZoomFactor * zoomMultiplier, kMinimumZoomFactor, kMaximumZoomFactor);
         applyViewStateToCamera();
+        updateOverlayInfo();
         if (mRenderWindow != nullptr) {
             mRenderWindow->Render();
         }
@@ -650,6 +713,88 @@ void SliceViewWidget::updateMeasurementLabel(const QPointF &startPoint, const QP
     mMeasurementLabel->move(labelX, labelY);
     mMeasurementLabel->show();
     mMeasurementLabel->raise();
+}
+
+void SliceViewWidget::updateOverlayInfo()
+{
+    if (mImageOverlayWidget == nullptr) {
+        return;
+    }
+
+    if (mCurrentSeries == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid()
+        || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= mCurrentVolumeData->depth
+        || mCurrentSliceIndex >= mCurrentSeries->slices.size()) {
+        mImageOverlayWidget->clearOverlay();
+        return;
+    }
+
+    const DicomSliceInfo &sliceInfo = mCurrentSeries->slices.at(mCurrentSliceIndex);
+    OverlayInfo overlayInfo;
+
+    if (!sliceInfo.patientName.isEmpty()) {
+        overlayInfo.topLeftLines.push_back(sliceInfo.patientName);
+    } // 匿名化后为[Anonymized^^]
+    if (!sliceInfo.patientId.isEmpty()) {
+        overlayInfo.topLeftLines.push_back(QStringLiteral("ID: %1").arg(sliceInfo.patientId));
+    } // 匿名化后为[0]
+    if (!sliceInfo.patientBirthDate.isEmpty()) {
+        overlayInfo.topLeftLines.push_back(sliceInfo.patientBirthDate);
+    } // 匿名化后可能不显示
+    const QString sexAgeText = buildSexAgeText(sliceInfo);
+    if (!sexAgeText.isEmpty()) {
+        overlayInfo.topLeftLines.push_back(sexAgeText);
+    }
+
+    if (!sliceInfo.studyDate.isEmpty()) {
+        overlayInfo.topRightLines.push_back(formatDicomDate(sliceInfo.studyDate));
+    }
+    if (!sliceInfo.studyTime.isEmpty()) {
+        overlayInfo.topRightLines.push_back(formatDicomTime(sliceInfo.studyTime));
+    }
+    if (!mCurrentVolumeData->modality.isEmpty() && mCurrentVolumeData->width && mCurrentVolumeData->height) {
+        overlayInfo.topRightLines.push_back(QStringLiteral("%1 [%2x%3]")
+                                                .arg(mCurrentVolumeData->modality)
+                                                .arg(mCurrentVolumeData->width)
+                                                .arg(mCurrentVolumeData->height));
+    }
+    if (sliceInfo.hasKvp || sliceInfo.hasTubeCurrentMa) {
+        QStringList technicalParts;
+        if (sliceInfo.hasKvp) {
+            technicalParts.push_back(QStringLiteral("%1 kVp").arg(sliceInfo.kvp, 0, 'f', 0));
+        }
+        if (sliceInfo.hasTubeCurrentMa) {
+            technicalParts.push_back(QStringLiteral("%1 mA").arg(sliceInfo.tubeCurrentMa, 0, 'f', 0));
+        }
+        overlayInfo.topRightLines.push_back(technicalParts.join(QStringLiteral(" / ")));
+    }
+
+    QString seriesText;
+    if (!mCurrentSeries->seriesDescription.isEmpty()) {
+        seriesText = mCurrentSeries->seriesDescription;
+    } else if (sliceInfo.hasSeriesNumber) {
+        seriesText = QStringLiteral("Series %1").arg(sliceInfo.seriesNumber);
+    }
+    if (!seriesText.isEmpty()) {
+        overlayInfo.bottomLeftLines.push_back(seriesText);
+    }
+    if (sliceInfo.hasInstanceNumber) {
+        overlayInfo.bottomLeftLines.push_back(QStringLiteral("Image %1 / %2").arg(sliceInfo.instanceNumber).arg(mCurrentVolumeData->depth));
+    } else {
+        overlayInfo.bottomLeftLines.push_back(QStringLiteral("Slice %1 / %2").arg(mCurrentSliceIndex + 1).arg(mCurrentVolumeData->depth));
+    }
+    const QString slicePositionText = formatSlicePositionText(sliceInfo);
+    if (!slicePositionText.isEmpty()) {
+        overlayInfo.bottomLeftLines.push_back(slicePositionText);
+    }
+
+    overlayInfo.bottomRightLines.push_back(
+        QStringLiteral("WW/WL: %1 / %2").arg(mCurrentWindowWidth, 0, 'f', 1).arg(mCurrentWindowCenter, 0, 'f', 1));
+    if (sliceInfo.hasSliceThickness) {
+        overlayInfo.bottomRightLines.push_back(QStringLiteral("Thickness: %1 mm").arg(sliceInfo.sliceThickness, 0, 'f', 2));
+    }
+    overlayInfo.bottomRightLines.push_back(QStringLiteral("Zoom: %1x").arg(mZoomFactor, 0, 'f', 2));
+
+    mImageOverlayWidget->setOverlayInfo(overlayInfo);
 }
 
 /**

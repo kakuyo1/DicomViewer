@@ -12,12 +12,25 @@ struct DicomVector3
 struct DicomSliceInfo
 {
     QString filePath;
-    QString seriesInstanceUid;
-    QString sopInstanceUid;
-    QString seriesDescription;
-    QString modality;
 
-    int instanceNumber     = 0;
+    QString patientName;
+    QString patientId;
+    QString patientSex;             // M/F/O
+    QString patientAge;
+    QString patientBirthDate;
+
+    QString studyDate;              // 检查开始的日期
+    QString studyTime;              // 检查开始的时间
+
+    QString seriesInstanceUid;      // 序列实例 UID: 全球唯一（跨医院、跨设备、跨时间）
+    QString sopInstanceUid;         // SOP 实例 UID（单个图像的全局唯一标识）: 全球唯一
+    QString seriesDescription;
+    QString modality;               // CT/MR/...
+
+    int seriesNumber       = 0;     // 序列号: 单个 Study 内部唯一
+    bool hasSeriesNumber   = false;
+
+    int instanceNumber     = 0;     // 实例号（图像在序列中的编号）: 单个 Series 内部唯一
     bool hasInstanceNumber = false;
 
     DicomVector3 imagePositionPatient;
@@ -30,6 +43,15 @@ struct DicomSliceInfo
 
     double sliceThickness  = 0.0;
     bool hasSliceThickness = false;
+
+    double sliceLocation   = 0.0;
+    bool hasSliceLocation  = false;
+
+    double kvp             = 0.0;               // 峰值管电压: 决定 X 射线的穿透能力（对比度）
+    bool hasKvp            = false;
+
+    double tubeCurrentMa   = 0.0;               // 管电流: 决定 X 射线的强度（即光子数量，与图像噪声直接相关）
+    bool hasTubeCurrentMa  = false;
 
     double windowCenter    = 0.0;
     double windowWidth     = 0.0;

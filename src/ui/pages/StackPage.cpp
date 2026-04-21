@@ -4,6 +4,7 @@
 
 #include <QVBoxLayout>
 
+#include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
 #include "services/state/ViewerSession.h"
 #include "ui/widgets/SliceViewWidget.h"
@@ -99,8 +100,9 @@ void StackPage::refreshFromSession()
         return;
     }
 
+    const DicomSeries *currentSeries = mViewerSession->currentSeries();
     const VolumeData *volumeData = mViewerSession->currentVolumeData();
-    if (volumeData == nullptr || !volumeData->isValid()) {
+    if (currentSeries == nullptr || volumeData == nullptr || !volumeData->isValid()) {
         clearDisplay();
         return;
     }
@@ -116,8 +118,9 @@ void StackPage::updateDisplayedSlice()
         return;
     }
 
+    const DicomSeries *currentSeries = mViewerSession->currentSeries();
     const VolumeData *volumeData = mViewerSession->currentVolumeData();
-    if (volumeData == nullptr || !volumeData->isValid()) {
+    if (currentSeries == nullptr || volumeData == nullptr || !volumeData->isValid()) {
         clearDisplay();
         return;
     }
@@ -127,7 +130,7 @@ void StackPage::updateDisplayedSlice()
     }
 
     mCurrentSliceIndex = std::clamp(mCurrentSliceIndex, 0, volumeData->depth - 1);
-    mSliceViewWidget->showAxialSlice(*volumeData, mCurrentSliceIndex);
+    mSliceViewWidget->showAxialSlice(*currentSeries, *volumeData, mCurrentSliceIndex);
 }
 
 void StackPage::handleSliceScrollRequested(int steps)
