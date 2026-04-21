@@ -29,6 +29,7 @@ private:
     void handleImportFailed(const QString &message);
     void handleImportSucceeded(const ImportResult &result);
     void setImportBusy(bool busy);
+    void printImportSucceededMsg(const ImportResult &result);
 
 private:
     ImportController * mImportController = nullptr;

@@ -78,6 +78,25 @@ QToolButton *StackToolBar::createToolButton(const QString &text, bool checkable)
     return button;
 }
 
+void StackToolBar::setActiveToolMode(StackToolMode mode)
+{
+    if (mode == StackToolMode::Pan && mPanButton != nullptr) {
+        mPanButton->setChecked(true);
+        return;
+    }
+    if (mode == StackToolMode::Zoom && mZoomButton != nullptr) {
+        mZoomButton->setChecked(true);
+        return;
+    }
+    if (mode == StackToolMode::WindowLevel && mWindowLevelButton != nullptr) {
+        mWindowLevelButton->setChecked(true);
+        return;
+    }
+    if (mode == StackToolMode::Measure && mMeasureButton != nullptr) {
+        mMeasureButton->setChecked(true);
+    }
+}
+
 void StackToolBar::handleModeButtonClicked(QAbstractButton *button)
 {
     if (button == mPanButton) {

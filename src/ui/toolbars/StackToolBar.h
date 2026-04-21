@@ -16,6 +16,8 @@ public:
     explicit StackToolBar(QWidget *parent = nullptr);
     ~StackToolBar();
 
+    void setActiveToolMode(StackToolMode mode);
+
 signals:
     void toolModeChanged(StackToolMode mode);
     void invertTriggered();

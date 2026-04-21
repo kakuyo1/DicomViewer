@@ -130,8 +130,33 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
 {
     setImportBusy(false);
 
+    // 设置WindowLevel为默认工具，然后每次导入都重置一下上次工具造成的变化
+    if (mStackToolBar != nullptr) {
+        mStackToolBar->setActiveToolMode(StackToolMode::WindowLevel);
+    }
+
+    if (mWorkSpaceWidget != nullptr) {
+        mWorkSpaceWidget->setStackToolMode(StackToolMode::WindowLevel);
+        mWorkSpaceWidget->resetStackView();
+    }
+
     mViewerSession->setImportResult(result);
 
+    printImportSucceededMsg(result);
+}
+
+void MainWindow::setImportBusy(bool busy)
+{
+    mImportInProgress = busy;
+    if (busy) {
+        QApplication::setOverrideCursor(Qt::BusyCursor);
+    } else {
+        QApplication::restoreOverrideCursor();
+    }
+}
+
+void MainWindow::printImportSucceededMsg(const ImportResult &result)
+{
     const DicomSeries *currentSeries     = mViewerSession->currentSeries();
     const VolumeData  *currentVolumeData = mViewerSession->currentVolumeData();
     if (currentSeries == nullptr || currentVolumeData == nullptr) {
@@ -140,8 +165,8 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
     }
 
     const QString description = currentSeries->seriesDescription.isEmpty()
-        ? QStringLiteral("(No Series Description)")
-        : currentSeries->seriesDescription;
+                                    ? QStringLiteral("(No Series Description)")
+                                    : currentSeries->seriesDescription;
 
     spdlog::info(
         "Selected CT series: {} | {} slices | {}",
@@ -169,15 +194,5 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
 
     for (const QString &warning : result.volumeBuildResult.warnings) {
         spdlog::warn("Import warning: {}", warning.toStdString());
-    }
-}
-
-void MainWindow::setImportBusy(bool busy)
-{
-    mImportInProgress = busy;
-    if (busy) {
-        QApplication::setOverrideCursor(Qt::BusyCursor);
-    } else {
-        QApplication::restoreOverrideCursor();
     }
 }
