@@ -4,7 +4,10 @@
 #include <cmath>
 
 #include <QKeyEvent>
+#include <QLabel>
 #include <QMouseEvent>
+#include <QPaintEvent>
+#include <QPainter>
 #include <QWheelEvent>
 
 #include <vtkCamera.h>
@@ -24,6 +27,7 @@ namespace
 constexpr double kMinimumInteractiveWindowWidth = 20.0;
 constexpr double kMinimumZoomFactor             = 0.1;
 constexpr double kMaximumZoomFactor             = 20.0;
+constexpr double kMeasurementTickSpacingMm      = 20.0;
 
 /** @note 空操作 interactor style，用来清空原生VTK Interactor的键鼠操作，不能直接disable interactor,因为它包含VTK的事件循环，会直接黑屏！ */
 class StackNoOpInteractorStyle : public vtkInteractorStyleUser
@@ -93,6 +97,15 @@ SliceViewWidget::SliceViewWidget(QWidget *parent)
     : QVTKOpenGLNativeWidget(parent)
 {
     setupVtkPipeline();
+
+    mMeasurementLabel = new QLabel(this);
+    mMeasurementLabel->hide();
+    mMeasurementLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    mMeasurementLabel->setStyleSheet(QStringLiteral(
+        "color: rgb(255, 255, 0);"
+        "background: transparent;"
+        "font-size: 13px;"
+        "font-family: Sans Serif;"));
 }
 
 SliceViewWidget::~SliceViewWidget()
@@ -108,6 +121,7 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
     }
 
     const bool volumeChanged = (mCurrentVolumeData != &volumeData);
+    const bool sliceChanged = (mCurrentSliceIndex != sliceIndex);
     mCurrentVolumeData = &volumeData;
     mCurrentSliceIndex = sliceIndex;
 
@@ -119,6 +133,9 @@ void SliceViewWidget::showAxialSlice(const VolumeData &volumeData, int sliceInde
         mPanOffset              = QPointF(0.0, 0.0);
         mZoomFactor             = 1.0;
         mCameraStateInitialized = false;
+    }
+    if (volumeChanged || sliceChanged) {
+        clearMeasurement();
     }
 
     renderCurrentSlice();
@@ -235,6 +252,7 @@ void SliceViewWidget::clearDisplay()
     mCurrentVolumeData = nullptr;
     mCurrentSliceIndex = -1;
     mMouseDragActive   = false;
+    clearMeasurement();
 
     if (mImageActor != nullptr) {
         mImageActor->SetVisibility(false);
@@ -242,6 +260,63 @@ void SliceViewWidget::clearDisplay()
     if (mRenderWindow != nullptr) {
         mRenderWindow->Render();
     }
+}
+
+void SliceViewWidget::paintEvent(QPaintEvent *event)
+{
+    QVTKOpenGLNativeWidget::paintEvent(event);
+
+    if (!mMeasurementVisible || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid()) {
+        if (mMeasurementLabel != nullptr) {
+            mMeasurementLabel->hide();
+        }
+        return;
+    }
+
+    /** @note 最终绘制时要用像素坐标 */
+    const QPointF startPoint = imagePointToWidgetPoint(mMeasurementLine.p1());
+    const QPointF endPoint   = imagePointToWidgetPoint(mMeasurementLine.p2());
+    if (!std::isfinite(startPoint.x())  || !std::isfinite(startPoint.y())
+        || !std::isfinite(endPoint.x()) || !std::isfinite(endPoint.y())) {
+        return;
+    }
+
+    const double distanceMm = std::hypot(mMeasurementLine.dx(), mMeasurementLine.dy());
+    const QLineF screenLine(startPoint, endPoint);
+    const double lineLength = screenLine.length();
+
+    // 画主测量线
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+    QPen linePen(QColor(255, 215, 0));
+    linePen.setWidth(2);
+    linePen.setCosmetic(true);
+    painter.setPen(linePen);
+    painter.drawLine(startPoint, endPoint);
+
+    if (lineLength > 1e-3) {
+        // 画两端刻度线
+        const QPointF direction = (endPoint - startPoint) / lineLength;
+        const QPointF normal(-direction.y(), direction.x());
+        constexpr double kEndTickHalfLength   = 7.0;
+        painter.drawLine(startPoint - normal * kEndTickHalfLength, startPoint + normal * kEndTickHalfLength);
+        painter.drawLine(endPoint   - normal * kEndTickHalfLength, endPoint   + normal * kEndTickHalfLength);
+
+        // 画中间刻度
+        constexpr double kInnerTickHalfLength = 4.0;
+        if (distanceMm >= kMeasurementTickSpacingMm) {
+            const int tickCount = static_cast<int>(std::floor(distanceMm / kMeasurementTickSpacingMm));
+            for (int tickIndex = 1; tickIndex < tickCount; ++tickIndex) {
+                const double distanceRatio = (tickIndex * kMeasurementTickSpacingMm) / distanceMm;
+                const QPointF tickCenter   = startPoint + (endPoint - startPoint) * distanceRatio;
+                painter.drawLine(tickCenter - normal * kInnerTickHalfLength, tickCenter);
+            }
+        }
+    }
+
+    updateMeasurementLabel(startPoint, endPoint, distanceMm);
 }
 
 void SliceViewWidget::mousePressEvent(QMouseEvent *event)
@@ -271,6 +346,18 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
         mMouseDragActive     = true;
         mMouseDragStartPos   = event->pos();
         mDragStartZoomFactor = mZoomFactor;
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Measure) {
+        QPointF imagePoint;
+        if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
+            mMeasurementLine     = QLineF(imagePoint, imagePoint);
+            mMeasurementVisible  = true;
+            mMeasurementDragging = true;
+            update();
+        }
         event->accept();
         return;
     }
@@ -346,6 +433,16 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
+    if (mMeasurementDragging && mToolMode == StackToolMode::Measure) {
+        QPointF imagePoint;
+        if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
+            mMeasurementLine.setP2(imagePoint);
+            update();
+        }
+        event->accept();
+        return;
+    }
+
     event->accept();
 }
 
@@ -357,6 +454,12 @@ void SliceViewWidget::mouseReleaseEvent(QMouseEvent *event)
 
     if (event->button() == Qt::LeftButton && mMouseDragActive) {
         mMouseDragActive = false;
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mMeasurementDragging) {
+        mMeasurementDragging = false;
         event->accept();
         return;
     }
@@ -387,8 +490,12 @@ void SliceViewWidget::wheelEvent(QWheelEvent *event)
 
 void SliceViewWidget::setToolMode(StackToolMode mode)
 {
+    if (mToolMode == StackToolMode::Measure && mode != StackToolMode::Measure) {
+        clearMeasurement();
+    }
     mToolMode = mode;
     mMouseDragActive = false;
+    mMeasurementDragging = false;
 }
 
 void SliceViewWidget::setInvertEnabled(bool enabled)
@@ -400,12 +507,14 @@ void SliceViewWidget::setInvertEnabled(bool enabled)
 void SliceViewWidget::setFlipHorizontalEnabled(bool enabled)
 {
     mFlipHorizontalEnabled = enabled;
+    clearMeasurement();
     renderCurrentSlice();
 }
 
 void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
 {
     mFlipVerticalEnabled = enabled;
+    clearMeasurement();
     renderCurrentSlice();
 }
 
@@ -418,6 +527,7 @@ void SliceViewWidget::resetViewState()
     mPanOffset              = QPointF(0.0, 0.0);
     mZoomFactor             = 1.0;
     mCameraStateInitialized = false;
+    clearMeasurement();
     resetWindowLevelToDefault();
     renderCurrentSlice();
 }
@@ -511,6 +621,108 @@ void SliceViewWidget::applyViewStateToCamera()
     camera->SetParallelScale(mBaseParallelScale / std::max(kMinimumZoomFactor, mZoomFactor));
     camera->ParallelProjectionOn();         // 防止ResetCamera又改回透视投影
     mRenderer->ResetCameraClippingRange();  // 自动调整裁剪范围，使得所有物体都能显示在视图中
+}
+
+void SliceViewWidget::clearMeasurement()
+{
+    mMeasurementVisible  = false;
+    mMeasurementDragging = false;
+    mMeasurementLine     = QLineF();
+    if (mMeasurementLabel != nullptr) {
+        mMeasurementLabel->hide();
+    }
+    update();
+}
+
+void SliceViewWidget::updateMeasurementLabel(const QPointF &startPoint, const QPointF &endPoint, double distanceMm)
+{
+    if (mMeasurementLabel == nullptr) {
+        return;
+    }
+
+    mMeasurementLabel->setText(QString::number(distanceMm, 'f', 2) + QStringLiteral(" mm"));
+    mMeasurementLabel->adjustSize();
+
+    const QPointF midPoint = 0.5 * (startPoint + endPoint);
+    // 偏右上一点
+    const int labelX = static_cast<int>(std::lround(midPoint.x() + 8.0));
+    const int labelY = static_cast<int>(std::lround(midPoint.y() - mMeasurementLabel->height() - 4.0));
+    mMeasurementLabel->move(labelX, labelY);
+    mMeasurementLabel->show();
+    mMeasurementLabel->raise();
+}
+
+/**
+ *  @note 将 Qt 屏幕像素坐标转换为 VTK 图像的世界坐标
+ *
+ *  vtkImageData::SetSpacing(spacingX, spacingY, 1.0)
+ *    ↓
+ *  图像在 VTK 世界中的尺寸单位变成 spacing 对应的物理长度
+ *    ↓
+ *  camera / actor / renderer 都工作在这个世界坐标系里
+ *    ↓
+ *  widgetPointToImagePoint() 算出来的是世界坐标
+ *    ↓
+ *  因此 worldX / worldY 的单位也就是 spacing 对应的物理单位（通常 mm）
+ */
+bool SliceViewWidget::widgetPointToImagePoint(const QPoint &widgetPoint, QPointF *imagePoint) const
+{
+    if (imagePoint == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mRenderer == nullptr) {
+        return false;
+    }
+
+    vtkCamera *camera      = mRenderer->GetActiveCamera();
+    const QSize widgetSize = size();
+    if (camera == nullptr || widgetSize.width() <= 0 || widgetSize.height() <= 0) {
+        return false;
+    }
+
+    const double spacingX = mCurrentVolumeData->spacingX;
+    const double spacingY = mCurrentVolumeData->spacingY;
+    const double maxX = std::max(0.0, static_cast<double>(mCurrentVolumeData->width - 1)  * spacingX);
+    const double maxY = std::max(0.0, static_cast<double>(mCurrentVolumeData->height - 1) * spacingY);
+
+    const double viewHeightWorld = 2.0 * camera->GetParallelScale();
+    const double viewWidthWorld  = viewHeightWorld * static_cast<double>(widgetSize.width()) / static_cast<double>(widgetSize.height());
+
+    double focalPoint[3] = {0.0, 0.0, 0.0};
+    camera->GetFocalPoint(focalPoint);
+
+    /**
+     *  @note focalPoint[0] - 0.5 * viewWidthWorld   -> 世界范围的左边界
+     *        focalPoint[1] + 0.5 * viewHeightWorld  -> 世界范围的上边界
+     */
+    const double worldX = focalPoint[0] - 0.5 * viewWidthWorld  + static_cast<double>(widgetPoint.x()) * viewWidthWorld / static_cast<double>(widgetSize.width());
+    const double worldY = focalPoint[1] + 0.5 * viewHeightWorld - static_cast<double>(widgetPoint.y()) * viewHeightWorld / static_cast<double>(widgetSize.height());
+    if (worldX < 0.0 || worldX > maxX || worldY < 0.0 || worldY > maxY) {
+        return false;
+    }
+
+    *imagePoint = QPointF(worldX, worldY);
+    return true;
+}
+
+QPointF SliceViewWidget::imagePointToWidgetPoint(const QPointF &imagePoint) const
+{
+    if (mRenderer == nullptr) {
+        return QPointF();
+    }
+
+    vtkCamera *camera      = mRenderer->GetActiveCamera();
+    const QSize widgetSize = size();
+    if (camera == nullptr || widgetSize.width() <= 0 || widgetSize.height() <= 0) {
+        return QPointF();
+    }
+
+    const double viewHeightWorld = 2.0 * camera->GetParallelScale();
+    const double viewWidthWorld  = viewHeightWorld * static_cast<double>(widgetSize.width()) / static_cast<double>(widgetSize.height());
+
+    double focalPoint[3] = {0.0, 0.0, 0.0};
+    camera->GetFocalPoint(focalPoint);
+
+    const double widgetX = (imagePoint.x() - (focalPoint[0] - 0.5 * viewWidthWorld)) * static_cast<double>(widgetSize.width()) / viewWidthWorld;
+    const double widgetY = ((focalPoint[1] + 0.5 * viewHeightWorld) - imagePoint.y()) * static_cast<double>(widgetSize.height()) / viewHeightWorld;
+    return QPointF(widgetX, widgetY);
 }
 
 void SliceViewWidget::resetWindowLevelToDefault()
