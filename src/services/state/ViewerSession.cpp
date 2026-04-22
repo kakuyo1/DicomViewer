@@ -53,7 +53,7 @@ const VolumeData *ViewerSession::currentVolumeData() const
 void ViewerSession::setImportResult(const ImportResult &result)
 {
     mCurrentImportResult = result;
-    emit sessionChanged();
+    emit sessionChanged();          // 标志本次series导入（解析 + 构建volume）成功 -> 触发WorkSpace渲染/缩略图....
 }
 
 void ViewerSession::clear()

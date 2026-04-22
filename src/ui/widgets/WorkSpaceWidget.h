@@ -16,11 +16,15 @@ public:
     ~WorkSpaceWidget();
 
     void setViewerSession(ViewerSession *viewerSession);
+    void setCurrentStackSliceIndex(int sliceIndex);
     void setStackToolMode(StackToolMode mode);
     void triggerStackInvert();
     void triggerStackFlipHorizontal();
     void triggerStackFlipVertical();
     void resetStackView();
+
+signals:
+    void currentStackSliceChanged(int sliceIndex);
 
 private:
     void setupUi();

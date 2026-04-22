@@ -16,11 +16,15 @@ public:
     ~StackPage();
 
     void setViewerSession(ViewerSession *viewerSession);
+    void setCurrentSliceIndex(int sliceIndex);
     void setToolMode(StackToolMode mode);
     void toggleInvert();
     void toggleFlipHorizontal();
     void toggleFlipVertical();
     void resetView();
+
+signals:
+    void currentSliceChanged(int sliceIndex);
 
 private:
     void setupUi();

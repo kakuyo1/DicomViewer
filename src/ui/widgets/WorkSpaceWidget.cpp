@@ -18,6 +18,7 @@ void WorkSpaceWidget::setupUi()
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     mStackPage = new StackPage(this);
+    connect(mStackPage, &StackPage::currentSliceChanged, this, &WorkSpaceWidget::currentStackSliceChanged);
     addWidget(mStackPage);
     setCurrentWidget(mStackPage);
 }
@@ -27,6 +28,13 @@ void WorkSpaceWidget::setViewerSession(ViewerSession *viewerSession)
     mViewerSession = viewerSession;
     if (mStackPage != nullptr) {
         mStackPage->setViewerSession(mViewerSession);
+    }
+}
+
+void WorkSpaceWidget::setCurrentStackSliceIndex(int sliceIndex)
+{
+    if (mStackPage != nullptr) {
+        mStackPage->setCurrentSliceIndex(sliceIndex);
     }
 }
 

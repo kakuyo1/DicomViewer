@@ -71,6 +71,7 @@ void MainWindow::setupUi()
     mWorkSpaceWidget = new WorkSpaceWidget(contentContainer);
     mWorkSpaceWidget->setViewerSession(mViewerSession);
     mThumbnailPanel = new ThumbnailPanel(contentContainer);
+    mThumbnailPanel->setViewerSession(mViewerSession);
 
     contentLayout->addWidget(leftContainer);
     contentLayout->addWidget(mWorkSpaceWidget, 1);
@@ -92,6 +93,11 @@ void MainWindow::setupConnects()
     connect(mStackToolBar, &StackToolBar::flipHorizontalTriggered,  mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipHorizontal);
     connect(mStackToolBar, &StackToolBar::flipVerticalTriggered,    mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipVertical);
     connect(mStackToolBar, &StackToolBar::resetTriggered,           mWorkSpaceWidget, &WorkSpaceWidget::resetStackView);
+
+    // 用户点击缩略图切片 -> 主窗口渲染对应切片
+    connect(mThumbnailPanel,  &ThumbnailPanel::sliceActivated,            mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
+    // 主窗口滚轮切换切片 -> 缩略图滚动至对应切片
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged, mThumbnailPanel,  &ThumbnailPanel::setCurrentSliceIndex);
 
     connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);

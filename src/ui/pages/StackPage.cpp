@@ -51,6 +51,26 @@ void StackPage::setViewerSession(ViewerSession *viewerSession)
     refreshFromSession();
 }
 
+void StackPage::setCurrentSliceIndex(int sliceIndex)
+{
+    if (mViewerSession == nullptr) {
+        return;
+    }
+
+    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        return;
+    }
+
+    const int clampedSliceIndex = std::clamp(sliceIndex, 0, volumeData->depth - 1);
+    if (mCurrentSliceIndex == clampedSliceIndex) {
+        return;
+    }
+
+    mCurrentSliceIndex = clampedSliceIndex;
+    updateDisplayedSlice();
+}
+
 void StackPage::setToolMode(StackToolMode mode)
 {
     mToolMode = mode;
@@ -94,14 +114,14 @@ void StackPage::resetView()
     }
 }
 
-void StackPage::refreshFromSession()
+void StackPage::refreshFromSession()    /// 导入成功初始化切片
 {
     if (mSliceViewWidget == nullptr || mViewerSession == nullptr) {
         return;
     }
 
     const DicomSeries *currentSeries = mViewerSession->currentSeries();
-    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    const VolumeData  *volumeData    = mViewerSession->currentVolumeData();
     if (currentSeries == nullptr || volumeData == nullptr || !volumeData->isValid()) {
         clearDisplay();
         return;
@@ -119,7 +139,7 @@ void StackPage::updateDisplayedSlice()
     }
 
     const DicomSeries *currentSeries = mViewerSession->currentSeries();
-    const VolumeData *volumeData = mViewerSession->currentVolumeData();
+    const VolumeData  *volumeData    = mViewerSession->currentVolumeData();
     if (currentSeries == nullptr || volumeData == nullptr || !volumeData->isValid()) {
         clearDisplay();
         return;
@@ -131,9 +151,10 @@ void StackPage::updateDisplayedSlice()
 
     mCurrentSliceIndex = std::clamp(mCurrentSliceIndex, 0, volumeData->depth - 1);
     mSliceViewWidget->showAxialSlice(*currentSeries, *volumeData, mCurrentSliceIndex);
+    emit currentSliceChanged(mCurrentSliceIndex); // 通知一下缩略图滚动同步
 }
 
-void StackPage::handleSliceScrollRequested(int steps)
+void StackPage::handleSliceScrollRequested(int steps)   /// 滚轮切换切片
 {
     if (steps == 0 || mViewerSession == nullptr) {
         return;
@@ -156,6 +177,7 @@ void StackPage::handleSliceScrollRequested(int steps)
 void StackPage::clearDisplay()
 {
     mCurrentSliceIndex = -1;
+    emit currentSliceChanged(-1);
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->clearDisplay();
     }
