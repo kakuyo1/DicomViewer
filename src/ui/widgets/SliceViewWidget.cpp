@@ -1,6 +1,5 @@
 #include "SliceViewWidget.h"
 
-#include <algorithm>
 #include <cmath>
 
 #include <QKeyEvent>
@@ -21,6 +20,7 @@
 
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
+#include "core/worker/SliceImageBuilder.h"
 #include "ui/model/OverlayInfo.h"
 #include "ui/widgets/ImageOverlayWidget.h"
 
@@ -95,45 +95,6 @@ public:
 
 vtkStandardNewMacro(StackNoOpInteractorStyle);
 
-/** @note 把原始的 16 位灰度值/HU（qint16）映射成显示用的 8 位灰度值（unsigned char，范围 0~255）*/
-unsigned char mapWindowLevel(qint16 value, double windowCenter, double windowWidth, qint16 sliceMin, qint16 sliceMax)
-{
-    double lower = 0.0;
-    double upper = 0.0;
-
-    if (windowWidth > 1.0) {
-        lower = windowCenter - windowWidth * 0.5;
-        upper = windowCenter + windowWidth * 0.5;
-    } else { // 退化->切片最小值作为黑色,切片最大值作为白色
-        lower = static_cast<double>(sliceMin);
-        upper = static_cast<double>(sliceMax);
-    }
-
-    // 避免除零或错误范围
-    if (upper <= lower) {
-        return 0;
-    }
-
-    const double normalized = (static_cast<double>(value) - lower) / (upper - lower); // [0,1]
-    const double clamped    = std::clamp(normalized, 0.0, 1.0);
-    return static_cast<unsigned char>(clamped * 255.0); // [0, 255]
-}
-
-bool isPaddingPixel(qint16 value, const VolumeData &volumeData)
-{
-    if (!volumeData.hasPixelPaddingValue) {
-        return false;
-    }
-
-    if (!volumeData.hasPixelPaddingRangeLimit) {
-        return value == volumeData.pixelPaddingValue;
-    }
-
-    const qint16 paddingMin = std::min(volumeData.pixelPaddingValue, volumeData.pixelPaddingRangeLimit);
-    const qint16 paddingMax = std::max(volumeData.pixelPaddingValue, volumeData.pixelPaddingRangeLimit);
-    return value >= paddingMin && value <= paddingMax;
-}
-
 } // namespace
 
 SliceViewWidget::SliceViewWidget(QWidget *parent)
@@ -199,80 +160,38 @@ void SliceViewWidget::renderCurrentSlice()
 
     const VolumeData &volumeData = *mCurrentVolumeData;
 
-    const int width           = volumeData.width;
-    const int height          = volumeData.height;
-    const int slicePixelCount = width * height;
-    const int sliceOffset     = mCurrentSliceIndex * slicePixelCount;
-    if (sliceOffset < 0 || sliceOffset + slicePixelCount > volumeData.voxels.size()) {
-        clearDisplay();
-        return;
-    }
-
-    // 计算切片在体数据中的偏移位置
-    const auto sliceBegin = volumeData.voxels.begin() + sliceOffset;
-    const auto sliceEnd   = sliceBegin + slicePixelCount;
-
-    // 找到最小灰度值和最大灰度值 -> 用于mapWindowLevel的回退
-    qint16 sliceMin = 0;
-    qint16 sliceMax = 0;
-    bool hasNonPaddingPixel = false;
-    // 排除填充像素影响窗宽窗位
-    for (auto it = sliceBegin; it != sliceEnd; ++it) {
-        if (isPaddingPixel(*it, volumeData)) {
-            continue;
-        }
-
-        if (!hasNonPaddingPixel) {
-            sliceMin = *it;
-            sliceMax = *it;
-            hasNonPaddingPixel = true;
-            continue;
-        }
-
-        sliceMin = std::min(sliceMin, *it);
-        sliceMax = std::max(sliceMax, *it);
-    }
-
-    if (!hasNonPaddingPixel) {
-        sliceMin = 0;
-        sliceMax = 0;
-    }
+    const int width  = volumeData.width;
+    const int height = volumeData.height;
 
     const bool geometryChanged = ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
     if (geometryChanged) {
         mCameraStateInitialized = false;
     }
 
+    SliceImageBuildOptions buildOptions;
+    buildOptions.windowCenter   = mCurrentWindowCenter;
+    buildOptions.windowWidth    = mCurrentWindowWidth;
+    buildOptions.invert         = mInvertEnabled;
+    buildOptions.flipHorizontal = mFlipHorizontalEnabled;
+    buildOptions.flipVertical   = mFlipVerticalEnabled;
+
+    const QImage image = buildSliceImage(volumeData, mCurrentSliceIndex, buildOptions);
+    if (image.isNull()) {
+        clearDisplay();
+        return;
+    }
+
     // 填充图片像素
     unsigned char *buffer = static_cast<unsigned char *>(mImageData->GetScalarPointer(0, 0, 0));
     for (int y = 0; y < height; ++y) {
-        const int sampleY    = mFlipVerticalEnabled ? (height - 1 - y) : y;
-        const qint16 *srcRow = volumeData.voxels.data() + sliceOffset + sampleY * width;
+        const uchar *srcRow   = image.constScanLine(y);
         /**
          *  @note DICOM坐标系原点在左上角
          *        VTK坐标系原点在左下角
          *        翻转Y轴确保图像方向正确（y -> height -1 -y）
          */
         unsigned char *dstRow = buffer + (height - 1 - y) * width;
-
-        for (int x = 0; x < width; ++x) {
-            const int sampleX       = mFlipHorizontalEnabled ? (width - 1 - x) : x;
-            const qint16 pixelValue = srcRow[sampleX];
-            unsigned char grayValue = 0;
-            // 只有非填充像素才进行窗宽窗位映射
-            if (!isPaddingPixel(pixelValue, volumeData)) {
-                grayValue = mapWindowLevel(
-                    pixelValue,
-                    mCurrentWindowCenter,
-                    mCurrentWindowWidth,
-                    sliceMin,
-                    sliceMax);
-                if (mInvertEnabled) {
-                    grayValue = static_cast<unsigned char>(255 - grayValue);
-                }
-            }
-            dstRow[x] = grayValue;
-        }
+        std::copy_n(srcRow, width, dstRow);
     }
 
     mImageData->Modified();

@@ -1,5 +1,7 @@
 #include "ThumbnailListModel.h"
 
+#include <QPixmap>
+
 ThumbnailListModel::ThumbnailListModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -55,9 +57,38 @@ QHash<int, QByteArray> ThumbnailListModel::roleNames() const
     };
 }
 
+int ThumbnailListModel::itemCount() const
+{
+    return mItems.size();
+}
+
+int ThumbnailListModel::generation() const
+{
+    return mGeneration;
+}
+
+ThumbnailState ThumbnailListModel::thumbnailStateAt(int row) const
+{
+    if (!isValidRow(row)) {
+        return ThumbnailState::Failed;
+    }
+
+    return mItems.at(row).state;
+}
+
+QString ThumbnailListModel::filePathAt(int row) const
+{
+    if (!isValidRow(row)) {
+        return {};
+    }
+
+    return mItems.at(row).filePath;
+}
+
 void ThumbnailListModel::setItems(const QVector<ThumbnailItemData> &items)
 {
     beginResetModel(); // 告诉所有附加的视图：模型即将失效，不要再依赖当前任何数据
+    ++mGeneration;
     mItems = items;
     endResetModel();   // 告诉所有视图：模型已经重置完成，数据已更新
 }
@@ -65,4 +96,52 @@ void ThumbnailListModel::setItems(const QVector<ThumbnailItemData> &items)
 void ThumbnailListModel::clear()
 {
     setItems({});
+}
+
+void ThumbnailListModel::markThumbnailLoading(int row)
+{
+    if (!isValidRow(row)) {
+        return;
+    }
+
+    ThumbnailItemData &item = mItems[row];
+    if (item.state == ThumbnailState::Loading) {
+        return;
+    }
+
+    item.state = ThumbnailState::Loading;
+    const QModelIndex modelIndex = index(row, 0);
+    emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole});     // 通知视图重绘
+}
+
+void ThumbnailListModel::setThumbnailReady(int row, const QPixmap &pixmap)
+{
+    if (!isValidRow(row)) {
+        return;
+    }
+
+    ThumbnailItemData &item = mItems[row];
+    item.state              = ThumbnailState::Ready;
+    item.thumbnailPixmap    = pixmap;
+
+    const QModelIndex modelIndex = index(row, 0);
+    emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole, ThumbnailPixmapRole});    // 通知视图重绘
+}
+
+void ThumbnailListModel::setThumbnailFailed(int row)
+{
+    if (!isValidRow(row)) {
+        return;
+    }
+
+    ThumbnailItemData &item = mItems[row];
+    item.state = ThumbnailState::Failed;
+
+    const QModelIndex modelIndex = index(row, 0);
+    emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole});     // 通知视图重绘
+}
+
+bool ThumbnailListModel::isValidRow(int row) const
+{
+    return row >= 0 && row < mItems.size();
 }

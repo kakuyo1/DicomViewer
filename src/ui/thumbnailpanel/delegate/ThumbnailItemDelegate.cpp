@@ -77,6 +77,15 @@ void ThumbnailItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem 
         painter->drawText(imageRect, Qt::AlignCenter, QStringLiteral("Thumbnail"));
     }
 
+    const ThumbnailState state = static_cast<ThumbnailState>(index.data(ThumbnailListModel::ThumbnailStateRole).toInt());
+    if (state == ThumbnailState::Loading || state == ThumbnailState::Failed) {
+        painter->setPen(state == ThumbnailState::Loading ? QColor(210, 214, 224) : QColor(224, 120, 120));
+        painter->drawText(
+            imageRect.adjusted(0, 0, 0, -6),
+            Qt::AlignHCenter | Qt::AlignBottom,
+            state == ThumbnailState::Loading ? QStringLiteral("Loading...") : QStringLiteral("Failed"));
+    }
+
     // 绘制文本标签
     const QRect textRect(
         itemRect.left()    + kOuterPadding,

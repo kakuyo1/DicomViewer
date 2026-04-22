@@ -1,15 +1,30 @@
 #include "ThumbnailPanel.h"
 
 #include <QColor>
+#include <QImage>
 #include <QItemSelectionModel>
 #include <QPixmap>
+#include <QResizeEvent>
+#include <QScrollBar>
+#include <QShowEvent>
 #include <QSignalBlocker>
+#include <QTimer>
 
 #include "core/model/dicom/DicomSeries.h"
+#include "core/model/volume/VolumeData.h"
+#include "core/worker/SliceImageBuilder.h"
 #include "services/state/ViewerSession.h"
 #include "ui/thumbnailpanel/delegate/ThumbnailItemDelegate.h"
+#include "ui/thumbnailpanel/loader/ThumbnailLoader.h"
 #include "ui/thumbnailpanel/model/ThumbnailItemData.h"
 #include "ui/thumbnailpanel/model/ThumbnailListModel.h"
+
+namespace
+{
+
+constexpr int kPreloadRowCount = 4;
+
+}
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent)
     : QListView(parent)
@@ -37,10 +52,16 @@ void ThumbnailPanel::setupUi()
 
     mThumbnailListModel    = new ThumbnailListModel(this);
     mThumbnailItemDelegate = new ThumbnailItemDelegate(this);
+    mThumbnailLoader       = new ThumbnailLoader(this);
     setModel(mThumbnailListModel);
     setItemDelegate(mThumbnailItemDelegate);
 
     connect(this, &QListView::clicked, this, &ThumbnailPanel::handleItemClicked);
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        requestVisibleThumbnails();
+    });
+    connect(mThumbnailLoader, &ThumbnailLoader::thumbnailLoaded, this, &ThumbnailPanel::handleThumbnailLoaded);
+    connect(mThumbnailLoader, &ThumbnailLoader::thumbnailFailed, this, &ThumbnailPanel::handleThumbnailFailed);
 }
 
 void ThumbnailPanel::setViewerSession(ViewerSession *viewerSession)
@@ -108,6 +129,7 @@ void ThumbnailPanel::refreshFromSession()
     QVector<ThumbnailItemData> items;
     items.reserve(currentSeries->slices.size());
 
+    // 为每一张 slice 构造一个 ThumbnailItemData
     for (int sliceIndex = 0; sliceIndex < currentSeries->slices.size(); ++sliceIndex) {
         const DicomSliceInfo &slice = currentSeries->slices.at(sliceIndex);
 
@@ -119,7 +141,7 @@ void ThumbnailPanel::refreshFromSession()
 
         QPixmap placeholderPixmap(160, 112);
         placeholderPixmap.fill(QColor(48, 52, 60));
-        item.thumbnailPixmap = placeholderPixmap;
+        item.thumbnailPixmap = placeholderPixmap;       // 显示占位图（灰色块）
 
         items.push_back(item);
     }
@@ -132,6 +154,10 @@ void ThumbnailPanel::refreshFromSession()
     if (mPendingSliceIndex >= 0) {
         setCurrentSliceIndex(mPendingSliceIndex);
     }
+
+    QTimer::singleShot(0, this, [this]() {
+        requestVisibleThumbnails();
+    });
 }
 
 void ThumbnailPanel::clearItems()
@@ -150,4 +176,108 @@ void ThumbnailPanel::handleItemClicked(const QModelIndex &index)
     }
 
     emit sliceActivated(index.data(ThumbnailListModel::SliceIndexRole).toInt());
+}
+
+void ThumbnailPanel::requestVisibleThumbnails()
+{
+    if (mThumbnailListModel == nullptr || mThumbnailLoader == nullptr) {
+        return;
+    }
+
+    const int itemCount = mThumbnailListModel->itemCount();
+    if (itemCount <= 0) {
+        return;
+    }
+
+    // 取视口中间的 x 坐标（x 不重要（随便取一列））
+    const int sampleX = std::max(0, viewport()->width() / 2);
+    // y 才是关键（上下） -> 0 ~ viewportHeight - 1
+    const QModelIndex firstVisibleIndex = indexAt(QPoint(sampleX, 0));
+    const QModelIndex lastVisibleIndex  = indexAt(QPoint(sampleX, viewport()->height() - 1));
+
+    if (!firstVisibleIndex.isValid() && !lastVisibleIndex.isValid()) {
+        requestThumbnailRange(0, std::min(itemCount - 1, kPreloadRowCount * 2));  // 直接加载前 N 个
+        return;
+    }
+
+    // 如果拿不到 → 默认 0
+    const int firstVisibleRow = firstVisibleIndex.isValid() ? firstVisibleIndex.row() : 0;
+    // 如果拿不到 → 默认最后一行
+    const int lastVisibleRow  = lastVisibleIndex.isValid() ? lastVisibleIndex.row() : (itemCount - 1);
+    // 预加载
+    const int requestFirstRow = std::max(0, firstVisibleRow - kPreloadRowCount);
+    const int requestLastRow  = std::min(itemCount - 1, lastVisibleRow + kPreloadRowCount);
+
+    requestThumbnailRange(requestFirstRow, requestLastRow);
+}
+
+void ThumbnailPanel::requestThumbnailRange(int firstRow, int lastRow)
+{
+    if (mThumbnailListModel == nullptr || mThumbnailLoader == nullptr) {
+        return;
+    }
+
+    const VolumeData *currentVolumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    if (currentVolumeData == nullptr || !currentVolumeData->isValid()) {
+        return;
+    }
+
+    const int requestGeneration = mThumbnailListModel->generation();
+    for (int row = firstRow; row <= lastRow; ++row) {
+        const ThumbnailState state = mThumbnailListModel->thumbnailStateAt(row);
+        if (state == ThumbnailState::Ready || state == ThumbnailState::Loading) {
+            continue;
+        }
+
+        const SliceImageBuildInput input = buildSliceImageInput(*currentVolumeData, row);
+        if (!input.isValid()) {
+            mThumbnailListModel->setThumbnailFailed(row);
+            continue;
+        }
+
+        // 先把loading文字渲染上去
+        mThumbnailListModel->markThumbnailLoading(row);
+        // 再渲染缩略图
+        mThumbnailLoader->requestThumbnail(row, input, requestGeneration, currentVolumeData->windowCenter, currentVolumeData->windowWidth);
+    }
+}
+
+void ThumbnailPanel::handleThumbnailLoaded(int row, int generation, const QImage &image)
+{
+    // 根据 generation 丢掉旧数据
+    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation()) {
+        return;
+    }
+
+    const QPixmap pixmap = QPixmap::fromImage(image);
+    if (pixmap.isNull()) {
+        mThumbnailListModel->setThumbnailFailed(row);
+        return;
+    }
+
+    mThumbnailListModel->setThumbnailReady(row, pixmap);
+}
+
+void ThumbnailPanel::handleThumbnailFailed(int row, int generation)
+{
+    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation()) {
+        return;
+    }
+
+    mThumbnailListModel->setThumbnailFailed(row);
+}
+
+void ThumbnailPanel::resizeEvent(QResizeEvent *event)
+{
+    QListView::resizeEvent(event);
+    requestVisibleThumbnails();
+}
+
+void ThumbnailPanel::showEvent(QShowEvent *event)
+{
+    QListView::showEvent(event);
+
+    QTimer::singleShot(0, this, [this]() {
+        requestVisibleThumbnails();
+    });
 }
