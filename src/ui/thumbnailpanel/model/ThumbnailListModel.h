@@ -4,6 +4,11 @@
 
 #include "ui/thumbnailpanel/model/ThumbnailItemData.h"
 
+/**
+ *  @note ThumbnailListModel 里存着 Ready 的 pixmap，
+ *  重复滚动不会重算 => model 本身已经在充当缓存（不需要再设计一套缓存机制）
+ *  缓存真正可能有用的场景是：切换 series 后再切回来 => 但是本轻量化项目暂不考虑
+ */
 class ThumbnailListModel : public QAbstractListModel
 {
     Q_OBJECT

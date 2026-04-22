@@ -1,9 +1,13 @@
 #include "core/worker/SliceImageBuilder.h"
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 
 namespace
 {
+
+using WindowLevelLut = std::array<unsigned char, 65536>;
 
 template<typename PixelAccessor> // 像素读取函数
 QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixelAccessor, bool hasPixelPaddingValue, qint16 pixelPaddingValue, bool hasPixelPaddingRangeLimit, qint16 pixelPaddingRangeLimit, const SliceImageBuildOptions &options)
@@ -12,37 +16,45 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
         return {};
     }
 
-    // 1.为 mapWindowLevel 的退化策略计算好 sliceMin 和 sliceMax
-    qint16 sliceMin = 0;
-    qint16 sliceMax = 0;
-    bool hasNonPaddingPixel = false;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const qint16 pixelValue = pixelAccessor(x, y);
-            // 跳过 padding 像素
-            if (isPaddingPixel(pixelValue, hasPixelPaddingValue, pixelPaddingValue, hasPixelPaddingRangeLimit, pixelPaddingRangeLimit)) {
-                continue;
-            }
+    // 1.为当前切片构建一次窗宽窗位 LUT，后续每个像素只做数组查表
+    const WindowLevelLut lut = [&]() {
+        WindowLevelLut table{};
 
-            // 初始化 min/max
-            if (!hasNonPaddingPixel) {
-                sliceMin = pixelValue;
-                sliceMax = pixelValue;
-                hasNonPaddingPixel = true;
-                continue;
-            }
-
-            // 更新 min/max
-            sliceMin = std::min(sliceMin, pixelValue);
-            sliceMax = std::max(sliceMax, pixelValue);
+        double lower = 0.0;
+        double upper = 0.0;
+        if (options.windowWidth > 1.0) { // 标准方式
+            lower = options.windowCenter - options.windowWidth * 0.5;
+            upper = options.windowCenter + options.windowWidth * 0.5;
+        } else { // 退化->使用最小可用窗宽，避免再扫描整张切片
+            lower = options.windowCenter - 0.5;
+            upper = options.windowCenter + 0.5;
         }
-    }
 
-    // 整张图都是 padding
-    if (!hasNonPaddingPixel) {
-        sliceMin = 0;
-        sliceMax = 0;
-    }
+        if (upper <= lower) {
+            table.fill(0);
+            return table;
+        }
+
+        const double denominator = upper - lower;
+        for (int i = 0; i < static_cast<int>(table.size()); ++i) {
+            /** @note i 从 0 到 65535，覆盖所有16位整数的位模式
+                      rawIndex 将 i 视为无符号16位整数的数值 */
+            const quint16 rawIndex = static_cast<quint16>(i);
+            qint16 value = 0;
+            std::memcpy(&value, &rawIndex, sizeof(value)); // unsigned -> signed
+
+            const double normalized = (static_cast<double>(value) - lower) / denominator;
+            const double clamped    = std::clamp(normalized, 0.0, 1.0);
+            table[rawIndex] = static_cast<unsigned char>(clamped * 255.0);
+        }
+
+        return table;
+    }();
+
+    const bool hasPadding     = hasPixelPaddingValue;
+    const qint16 paddingValue = pixelPaddingValue;
+    const qint16 paddingMin   = hasPixelPaddingRangeLimit ? std::min(pixelPaddingValue, pixelPaddingRangeLimit) : 0;
+    const qint16 paddingMax   = hasPixelPaddingRangeLimit ? std::max(pixelPaddingValue, pixelPaddingRangeLimit) : 0;
 
     // 2.创建输出图像
     QImage image(width, height, QImage::Format_Grayscale8);
@@ -50,24 +62,64 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
         return {};
     }
 
-    for (int y = 0; y < height; ++y) {
-        uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
-        /**
-         *  @note DICOM坐标系原点在左上角， 与 Qt 一致
-         */
-        const int sampleY = options.flipVertical ? (height - 1 - y) : y;
-        for (int x = 0; x < width; ++x) {
-            const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
-            const qint16 pixelValue = pixelAccessor(sampleX, sampleY);
-            unsigned char grayValue = 0;
-            // 只有非填充像素才进行窗宽窗位映射
-            if (!isPaddingPixel(pixelValue, hasPixelPaddingValue, pixelPaddingValue, hasPixelPaddingRangeLimit, pixelPaddingRangeLimit)) {
-                grayValue = mapWindowLevel(pixelValue, options.windowCenter, options.windowWidth, sliceMin, sliceMax);
+    if (!hasPadding) { /// no padding
+        for (int y = 0; y < height; ++y) {
+            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            /**
+             *  @note DICOM坐标系原点在左上角， 与 Qt 一致
+             */
+            const int sampleY = options.flipVertical ? (height - 1 - y) : y;
+            for (int x = 0; x < width; ++x) {
+                const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
+                // 所有像素都通过LUT映射
+                unsigned char grayValue = lut[static_cast<quint16>(pixelAccessor(sampleX, sampleY))];
                 if (options.invert) {
                     grayValue = static_cast<unsigned char>(255 - grayValue);
                 }
+                scanLine[x] = grayValue;
             }
-            scanLine[x] = grayValue;
+        }
+    } else if (!hasPixelPaddingRangeLimit) { /// single padding value
+        for (int y = 0; y < height; ++y) {
+            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            /**
+             *  @note DICOM坐标系原点在左上角， 与 Qt 一致
+             */
+            const int sampleY = options.flipVertical ? (height - 1 - y) : y;
+            for (int x = 0; x < width; ++x) {
+                const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
+                const qint16 pixelValue = pixelAccessor(sampleX, sampleY);
+                unsigned char grayValue = 0;
+                // 只有不等于填充值的像素才映射
+                if (pixelValue != paddingValue) {
+                    grayValue = lut[static_cast<quint16>(pixelValue)];
+                    if (options.invert) {
+                        grayValue = static_cast<unsigned char>(255 - grayValue);
+                    }
+                }
+                scanLine[x] = grayValue;
+            }
+        }
+    } else { /// padding range
+        for (int y = 0; y < height; ++y) {
+            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            /**
+             *  @note DICOM坐标系原点在左上角， 与 Qt 一致
+             */
+            const int sampleY = options.flipVertical ? (height - 1 - y) : y;
+            for (int x = 0; x < width; ++x) {
+                const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
+                const qint16 pixelValue = pixelAccessor(sampleX, sampleY);
+                unsigned char grayValue = 0;
+                // 像素值在[paddingMin, paddingMax]范围内视为填充
+                if (pixelValue < paddingMin || pixelValue > paddingMax) {
+                    grayValue = lut[static_cast<quint16>(pixelValue)];
+                    if (options.invert) {
+                        grayValue = static_cast<unsigned char>(255 - grayValue);
+                    }
+                }
+                scanLine[x] = grayValue;
+            }
         }
     }
 
@@ -79,45 +131,6 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
 }
 
 } // namespace
-
-bool isPaddingPixel(qint16 value, bool hasPixelPaddingValue, qint16 pixelPaddingValue, bool hasPixelPaddingRangeLimit, qint16 pixelPaddingRangeLimit)
-{
-    if (!hasPixelPaddingValue) {
-        return false;
-    }
-
-    if (!hasPixelPaddingRangeLimit) {
-        return value == pixelPaddingValue;
-    }
-
-    // e.g. pixelPaddingValue = 0, pixelPaddingRangeLimit = 50 => HU [0, 50] is not wantted.
-    const qint16 paddingMin = std::min(pixelPaddingValue, pixelPaddingRangeLimit);
-    const qint16 paddingMax = std::max(pixelPaddingValue, pixelPaddingRangeLimit);
-    return value >= paddingMin && value <= paddingMax;
-}
-
-/** @note 把原始的 16 位灰度值/HU（qint16）映射成显示用的 8 位灰度值（unsigned char，范围 0~255）*/
-unsigned char mapWindowLevel(qint16 value, double windowCenter, double windowWidth, qint16 sliceMin, qint16 sliceMax)
-{
-    double lower = 0.0;
-    double upper = 0.0;
-
-    if (windowWidth > 1.0) { // 标准方式
-        lower = windowCenter - windowWidth * 0.5;
-        upper = windowCenter + windowWidth * 0.5;
-    } else { // 退化->切片最小值作为黑色, 切片最大值作为白色
-        lower = static_cast<double>(sliceMin);
-        upper = static_cast<double>(sliceMax);
-    }
-
-    if (upper <= lower) {
-        return 0;
-    }
-
-    const double normalized = (static_cast<double>(value) - lower) / (upper - lower); // [0, 1]
-    const double clamped = std::clamp(normalized, 0.0, 1.0);
-    return static_cast<unsigned char>(clamped * 255.0); // [0, 255]
-}
 
 SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData, int sliceIndex)
 {
