@@ -141,12 +141,12 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
         mStackToolBar->setActiveToolMode(StackToolMode::WindowLevel);
     }
 
+    mViewerSession->setImportResult(result); /** @note 该函数不是每次导入都 new 一个新对象，而是原地覆盖这个对象，地址不变，所以不能用这个地址去判断 series 是否更新！ */
+
     if (mWorkSpaceWidget != nullptr) {
         mWorkSpaceWidget->setStackToolMode(StackToolMode::WindowLevel);
         mWorkSpaceWidget->resetStackView();
     }
-
-    mViewerSession->setImportResult(result);
 
     printImportSucceededMsg(result);
 }

@@ -5,6 +5,7 @@
 #include <QLineF>
 #include <QPoint>
 #include <QPointF>
+#include <QString>
 
 #include <vtkSmartPointer.h>
 
@@ -69,6 +70,7 @@ private:
 
 private:
     const DicomSeries *mCurrentSeries       = nullptr;
+    QString mCurrentSeriesInstanceUid;
     const VolumeData  *mCurrentVolumeData   = nullptr;
     int mCurrentSliceIndex                  = -1;
 

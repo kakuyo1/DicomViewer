@@ -48,12 +48,21 @@ void ThumbnailItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
 
-    const QRect itemRect  = option.rect.adjusted(1, 1, -1, -1);     // 让矩形稍微内缩，为选中高亮留出空间
-    const bool isSelected = (option.state & QStyle::State_Selected);
+    const QRect itemRect   = option.rect.adjusted(1, 1, -1, -1);     // 让矩形稍微内缩，为选中高亮留出空间
+    const bool isSelected  = (option.state & QStyle::State_Selected);
+    const bool isMouseOver = (option.state & QStyle::State_MouseOver);
 
     // 绘制背景卡片
     painter->setPen(Qt::NoPen);
-    painter->setBrush(isSelected ? QColor(56, 76, 112) : QColor(32, 35, 42));
+    QColor bgColor;
+    if (isSelected) {
+        bgColor = QColor(56, 76, 112);      // 选中：深蓝色
+    } else if (isMouseOver) {
+        bgColor = QColor(48, 52, 62);       // 悬浮：稍亮的灰色（比普通状态更淡）
+    } else {
+        bgColor = QColor(32, 35, 42);       // 普通：深灰色
+    }
+    painter->setBrush(bgColor);
     painter->drawRoundedRect(itemRect, 8.0, 8.0);
 
     // 绘制图片
@@ -62,15 +71,15 @@ void ThumbnailItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem 
         itemRect.top()   + kOuterPadding,
         itemRect.width() - 2 * kOuterPadding,
         kImageHeight);
-    painter->setBrush(QColor(18, 18, 18));
+    painter->setBrush(Qt::black);
     painter->drawRoundedRect(imageRect, 6.0, 6.0);
 
     const QPixmap pixmap = index.data(ThumbnailListModel::ThumbnailPixmapRole).value<QPixmap>();
     if (!pixmap.isNull()) {
         const QPixmap scaledPixmap = pixmap.scaled(imageRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         const QPoint imageTopLeft(
-            imageRect.center().x() - scaledPixmap.width() / 2,
-            imageRect.center().y() - scaledPixmap.height() / 2);
+            imageRect.center().x() - scaledPixmap.width()  / 2,
+            imageRect.center().y() - scaledPixmap.height() / 2 + 1);
         painter->drawPixmap(imageTopLeft, scaledPixmap);
     } else {
         painter->setPen(QColor(125, 132, 145));

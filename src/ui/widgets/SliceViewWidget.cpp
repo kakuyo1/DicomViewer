@@ -128,11 +128,13 @@ void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData
         return;
     }
 
-    mCurrentSeries           = &series;
-    const bool volumeChanged = (mCurrentVolumeData != &volumeData);
-    const bool sliceChanged  = (mCurrentSliceIndex != sliceIndex);
-    mCurrentVolumeData       = &volumeData;
-    mCurrentSliceIndex       = sliceIndex;
+    mCurrentSeries            = &series;
+    const bool seriesChanged  = (mCurrentSeriesInstanceUid != series.seriesInstanceUid);
+    const bool volumeChanged  = seriesChanged || (mCurrentVolumeData != &volumeData);
+    const bool sliceChanged   = (mCurrentSliceIndex != sliceIndex);
+    mCurrentSeriesInstanceUid = series.seriesInstanceUid;
+    mCurrentVolumeData        = &volumeData;
+    mCurrentSliceIndex        = sliceIndex;
 
     if (volumeChanged || !mWindowLevelInitialized) {
         resetWindowLevelToDefault();
@@ -218,6 +220,7 @@ void SliceViewWidget::renderCurrentSlice()
 void SliceViewWidget::clearDisplay()
 {
     mCurrentSeries     = nullptr;
+    mCurrentSeriesInstanceUid.clear();
     mCurrentVolumeData = nullptr;
     mCurrentSliceIndex = -1;
     mMouseDragActive   = false;
