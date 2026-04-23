@@ -13,7 +13,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-namespace
+namespace util
 {
 
 QString resolveProjectRelativePath(const QString &relativePath)
@@ -41,11 +41,6 @@ QString resolveProjectRelativePath(const QString &relativePath)
 
     return {};
 }
-
-} // namespace
-
-namespace util
-{
 
 void initializeLogging(spdlog::level::level_enum level)
 {

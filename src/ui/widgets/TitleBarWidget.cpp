@@ -2,15 +2,29 @@
 
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QShowEvent>
 #include <QStyle>
 #include <QToolButton>
 #include <QWindow>
 
+#include "common/Util.h"
+
 namespace
 {
+
+QIcon loadAppLogoIcon()
+{
+    const QString logoPath = util::resolveProjectRelativePath(QStringLiteral("resources/logo/Logo-V1.png"));
+    if (logoPath.isEmpty()) {
+        return {};
+    }
+
+    return QIcon(logoPath);
+}
 
 QPoint mouseGlobalPos(const QMouseEvent *event)
 {
@@ -36,7 +50,7 @@ int TitleBarWidget::barHeight() const
 
 void TitleBarWidget::setBarHeight(int height)
 {
-    mBarHeight = qMax(30, height);
+    mBarHeight = qMax(40, height);
     setFixedHeight(mBarHeight);
 }
 
@@ -46,10 +60,18 @@ void TitleBarWidget::syncWindowState()
     updateWindowControlIcons();
 
     if (mObservedWindow != nullptr) {
-        const QIcon logoIcon = mObservedWindow->windowIcon().isNull()
-            ? style()->standardIcon(QStyle::SP_ComputerIcon)
-            : mObservedWindow->windowIcon();
-        mLogoLabel->setPixmap(logoIcon.pixmap(24, 24));
+        QIcon logoIcon = mObservedWindow->windowIcon();
+        if (logoIcon.isNull()) {
+            logoIcon = loadAppLogoIcon();
+        }
+        if (logoIcon.isNull()) {
+            logoIcon = style()->standardIcon(QStyle::SP_ComputerIcon);
+        }
+
+        if (mObservedWindow->windowIcon().isNull() && !logoIcon.isNull()) {
+            mObservedWindow->setWindowIcon(logoIcon);
+        }
+        mLogoLabel->setPixmap(logoIcon.pixmap(30, 26));
     }
 }
 
@@ -127,14 +149,19 @@ void TitleBarWidget::setupUi()
     setFixedHeight(mBarHeight);
 
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(14, 0, 10, 0);
-    layout->setSpacing(8);
+    layout->setContentsMargins(10, 0, 10, 0);
+    layout->setSpacing(0);
 
     mLogoLabel = new QLabel(this);
     mLogoLabel->setObjectName(QStringLiteral("titleBarLogoLabel"));
-    mLogoLabel->setFixedSize(28, 28);
+    mLogoLabel->setFixedSize(30, 26);
     mLogoLabel->setAlignment(Qt::AlignCenter);
-    mLogoLabel->setPixmap(style()->standardIcon(QStyle::SP_ComputerIcon).pixmap(24, 24));
+
+    QIcon logoIcon = loadAppLogoIcon();
+    if (logoIcon.isNull()) {
+        logoIcon = style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+    mLogoLabel->setPixmap(logoIcon.pixmap(30, 26));
 
     mFileButton = new QToolButton(this);
     mFileButton->setObjectName(QStringLiteral("titleBarFileButton"));
@@ -162,11 +189,11 @@ void TitleBarWidget::setupUi()
     mCloseButton->setFixedSize(38, 30);
 
     layout->addWidget(mLogoLabel);
-    layout->addWidget(mFileButton, 0, Qt::AlignVCenter);
+    layout->addWidget(mFileButton,     0, Qt::AlignVCenter);
     layout->addStretch(1);
     layout->addWidget(mMinimizeButton, 0, Qt::AlignVCenter);
     layout->addWidget(mMaximizeButton, 0, Qt::AlignVCenter);
-    layout->addWidget(mCloseButton, 0, Qt::AlignVCenter);
+    layout->addWidget(mCloseButton,    0, Qt::AlignVCenter);
 
     connect(mFileButton, &QToolButton::clicked, this, &TitleBarWidget::openFolderRequested);
     connect(mMinimizeButton, &QToolButton::clicked, this, [this]() {

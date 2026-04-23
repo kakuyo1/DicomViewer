@@ -1,6 +1,8 @@
 #mainWindowRoot {
     background-color: #14181f;
     color: #e7edf6;
+    border: 1px solid #46505d;
+    border-radius: 12px;
 }
 
 #toolBarContainer,
@@ -29,13 +31,14 @@ QToolTip {
 #titleBarWidget {
     background-color: #181c23;
     border-bottom: 1px solid #2d3440;
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
 }
 
 #titleBarLogoLabel {
     color: #eef2f8;
-    background-color: #262d38;
-    border: 1px solid #39404c;
-    border-radius: 8px;
+    background-color: transparent;
+    border: none;
 }
 
 #titleBarFileButton,
@@ -82,41 +85,101 @@ QToolTip {
 #toolBarContainer {
     background-color: #161a21;
     border-top: 1px solid #202530;
-    border-bottom: 1px solid #2a313d;
+    border-bottom: none;
+}
+
+#toolBarShadow {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(8, 10, 14, 150),
+        stop: 0.18 rgba(10, 13, 18, 105),
+        stop: 0.45 rgba(12, 15, 20, 52),
+        stop: 0.78 rgba(15, 19, 25, 18),
+        stop: 1 rgba(20, 24, 31, 0)
+    );
 }
 
 #stackToolBar {
     background-color: #181c23;
-    border: 1px solid #2e3541;
+    border: 1px solid #353d4a;
     border-radius: 10px;
 }
 
 #stackToolBar QToolButton {
     min-height: 34px;
-    padding: 0 14px;
+    padding: 0 16px;
     color: #dce4ef;
-    background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 7px;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #323947,
+        stop: 0.52 #2a313d,
+        stop: 1 #212732
+    );
+    border-top: 1px solid #46505f;
+    border-left: 1px solid #3d4654;
+    border-right: 1px solid #313844;
+    border-bottom: 1px solid #46505f;
+    border-radius: 2px;
+    text-align: left;
+}
+
+#stackToolBar QToolButton::menu-indicator {
+    image: none;
+    width: 0;
 }
 
 #stackToolBar QToolButton:hover {
-    background-color: #232933;
-    border-color: #343d49;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #3a4251,
+        stop: 0.52 #303846,
+        stop: 1 #262d38
+    );
+    border-top: 1px solid #526072;
+    border-left: 1px solid #475161;
+    border-right: 1px solid #39414f;
+    border-bottom: 1px solid #526072;
 }
 
 #stackToolBar QToolButton:pressed {
-    background-color: #1c2129;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #222833,
+        stop: 1 #303846
+    );
+    border-top: 1px solid #1c212a;
+    border-left: 1px solid #252b35;
+    border-right: 1px solid #3d4654;
+    border-bottom: 1px solid #1c212a;
 }
 
 #stackToolBar QToolButton:checked {
     color: #f4f8ff;
-    background-color: #2a3340;
-    border-color: #57749a;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #355070,
+        stop: 0.55 #2d435d,
+        stop: 1 #26374c
+    );
+    border-top: 1px solid #6785ad;
+    border-left: 1px solid #587496;
+    border-right: 1px solid #45617f;
+    border-bottom: 1px solid #6785ad;
+}
+
+#stackToolBarSeparator {
+    background-color: #3d4552;
+    min-height: 24px;
+    max-height: 24px;
 }
 
 #contentContainer {
     background-color: #14181f;
+}
+
+#stackPage {
+    background-color: #11151b;
+    border: 1px solid #6f93c4;
 }
 
 #leftContainer {
@@ -127,32 +190,83 @@ QToolTip {
     background-color: transparent;
 }
 
-#viewModeBar QPushButton {
+#viewModeBar QToolButton {
     min-width: 132px;
-    min-height: 96px;
-    padding: 14px 12px;
+    min-height: 104px;
+    padding: 12px 10px 10px 10px;
     color: #d8e0ea;
-    background-color: #232933;
-    border: 1px solid #323a47;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #2b313c,
+        stop: 0.55 #242a34,
+        stop: 1 #1d222b
+    );
+    border-top: 1px solid #414b59;
+    border-left: 1px solid #394250;
+    border-right: 1px solid #2d3440;
+    border-bottom: 1px solid #414b59;
     border-radius: 10px;
     text-align: center;
     font-size: 14px;
     font-weight: 500;
 }
 
-#viewModeBar QPushButton:hover:!disabled {
-    background-color: #2a313c;
-    border-color: #465265;
+#viewModeBar QToolButton:hover:!disabled {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #36404d,
+        stop: 0.55 #2b3440,
+        stop: 1 #232a33
+    );
+    border-top: 1px solid #526173;
+    border-left: 1px solid #475262;
+    border-right: 1px solid #38414e;
+    border-bottom: 1px solid #526173;
 }
 
-#viewModeBar QPushButton:pressed:!disabled {
-    background-color: #20262f;
+#viewModeBar QToolButton:pressed:!disabled {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #1f252e,
+        stop: 1 #2c3440
+    );
+    border-top: 1px solid #1a2028;
+    border-left: 1px solid #252d38;
+    border-right: 1px solid #404a58;
+    border-bottom: 1px solid #1a2028;
 }
 
-#viewModeBar QPushButton:disabled {
-    color: #c9d0d9;
-    background-color: #222831;
-    border-color: #343c47;
+#viewModeBar QToolButton:checked {
+    color: #f4f8ff;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #355070,
+        stop: 0.55 #2c435d,
+        stop: 1 #24364a
+    );
+    border-top: 1px solid #6986ad;
+    border-left: 1px solid #5a7698;
+    border-right: 1px solid #455f7b;
+    border-bottom: 1px solid #6986ad;
+}
+
+#viewModeBar QToolButton:disabled {
+    color: #cbd3dd;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #2a3039,
+        stop: 0.55 #232932,
+        stop: 1 #1d222a
+    );
+    border-top: 1px solid #404956;
+    border-left: 1px solid #36404c;
+    border-right: 1px solid #2b313c;
+    border-bottom: 1px solid #404956;
+}
+
+#viewModeBar QToolButton::menu-indicator {
+    image: none;
+    width: 0;
 }
 
 #thumbnailPanel {

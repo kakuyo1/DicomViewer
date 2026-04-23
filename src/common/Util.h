@@ -9,6 +9,8 @@ class QApplication;
 namespace util
 {
 
+QString resolveProjectRelativePath(const QString &relativePath);
+
 void initializeLogging(spdlog::level::level_enum level = spdlog::level::debug);
 
 /**

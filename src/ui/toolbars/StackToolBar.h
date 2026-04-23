@@ -6,6 +6,7 @@
 
 class QAbstractButton;
 class QButtonGroup;
+class QFrame;
 class QToolButton;
 
 class StackToolBar : public QWidget
@@ -27,7 +28,8 @@ signals:
 
 private:
     void setupUi();
-    QToolButton *createToolButton(const QString &text, bool checkable);
+    QToolButton *createToolButton(const QString &text, const QString &iconPath, bool checkable);
+    QFrame *createSeparator();
     void handleModeButtonClicked(QAbstractButton *button);
 
 private:

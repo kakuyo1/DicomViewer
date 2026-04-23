@@ -22,14 +22,18 @@ StackPage::~StackPage()
 
 void StackPage::setupUi()
 {
+    setObjectName(QStringLiteral("stackPage"));
+    setAttribute(Qt::WA_StyledBackground, true);
+
     auto *rootLayout = new QVBoxLayout(this);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setContentsMargins(2, 2, 2, 2);
+    rootLayout->setSpacing(0);
 
     mSliceViewWidget = new SliceViewWidget(this);
     mSliceViewWidget->setMinimumSize(640, 480);
     rootLayout->addWidget(mSliceViewWidget);
 
-    connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested, this, &StackPage::handleSliceScrollRequested);
+    connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested,     this, &StackPage::handleSliceScrollRequested);
     connect(mSliceViewWidget, &SliceViewWidget::displayParametersChanged, this, &StackPage::displayParametersChanged);
 }
 

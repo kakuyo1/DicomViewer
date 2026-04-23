@@ -1,8 +1,11 @@
 #include "ViewModeBar.h"
 
-#include <QPushButton>
+#include <QButtonGroup>
+#include <QIcon>
+#include <QToolButton>
 #include <QVBoxLayout>
-#include <QStringList>
+
+#include "common/Util.h"
 
 ViewModeBar::ViewModeBar(QWidget *parent)
     : QWidget(parent)
@@ -25,16 +28,49 @@ void ViewModeBar::setupUi()
     layout->setContentsMargins(16, 16, 16, 16);
     layout->setSpacing(14);
 
-    const QStringList buttonTexts = {
-        QStringLiteral("Stack View"),
-        QStringLiteral("MPR View"),
-        QStringLiteral("VR View")
-    };
+    mModeGroup = new QButtonGroup(this);
+    mModeGroup->setExclusive(true);
 
-    for (const QString &text : buttonTexts) {
-        auto *button = new QPushButton(text, this);
-        button->setEnabled(false);
-        button->setFixedSize(132, 96);
-        layout->addWidget(button, 0, Qt::AlignHCenter);
+    mStackButton = createModeButton(QStringLiteral("Stack View"), QStringLiteral("resources/icons/StackView.png"));
+    mMprButton   = createModeButton(QStringLiteral("MPR View"),   QStringLiteral("resources/icons/MPRView.png"));
+    mVrButton    = createModeButton(QStringLiteral("VR View"),    QStringLiteral("resources/icons/VRView.png"));
+
+    mModeGroup->addButton(mStackButton);
+    mModeGroup->addButton(mMprButton);
+    mModeGroup->addButton(mVrButton);
+
+    mStackButton->setChecked(true);
+
+    connect(mStackButton, &QToolButton::clicked, this, [this]() {
+        emit viewModeChanged(QStringLiteral("Stack View"));
+    });
+    connect(mMprButton, &QToolButton::clicked, this, [this]() {
+        emit viewModeChanged(QStringLiteral("MPR View"));
+    });
+    connect(mVrButton, &QToolButton::clicked, this, [this]() {
+        emit viewModeChanged(QStringLiteral("VR View"));
+    });
+
+    layout->addWidget(mStackButton, 0, Qt::AlignHCenter);
+    layout->addWidget(mMprButton,   0, Qt::AlignHCenter);
+    layout->addWidget(mVrButton,    0, Qt::AlignHCenter);
+}
+
+QToolButton *ViewModeBar::createModeButton(const QString &text, const QString &iconPath)
+{
+    auto *button = new QToolButton(this);
+    button->setText(text);
+    button->setCheckable(true);
+    button->setFixedSize(132, 104);
+    button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    button->setIconSize(QSize(58, 58));
+    button->setAutoRaise(false);
+    button->setCursor(Qt::PointingHandCursor);
+
+    const QString resolvedIconPath = util::resolveProjectRelativePath(iconPath);
+    if (!resolvedIconPath.isEmpty()) {
+        button->setIcon(QIcon(resolvedIconPath));
     }
+
+    return button;
 }

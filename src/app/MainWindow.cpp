@@ -32,12 +32,13 @@ void MainWindow::setupUi()
     resize(1440, 810);
     setMinimumSize(960, 640);
     setWindowFlag(Qt::FramelessWindowHint, true);
+    setAttribute(Qt::WA_TranslucentBackground, true);
 
     auto *central = new QWidget(this);
     central->setObjectName(QStringLiteral("mainWindowRoot"));
 
     auto *rootLayout = new QVBoxLayout(central);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setContentsMargins(1, 1, 1, 1);
     rootLayout->setSpacing(0);
 
     mTitleBar = new TitleBarWidget(central);
@@ -53,6 +54,10 @@ void MainWindow::setupUi()
     toolBarLayout->addStretch();
     toolBarLayout->addWidget(mStackToolBar);
     toolBarLayout->addStretch();
+
+    auto *toolBarShadow = new QWidget(central);
+    toolBarShadow->setObjectName(QStringLiteral("toolBarShadow"));
+    toolBarShadow->setFixedHeight(14);
 
     auto *contentContainer = new QWidget(central);
     contentContainer->setObjectName(QStringLiteral("contentContainer"));
@@ -82,6 +87,7 @@ void MainWindow::setupUi()
 
     rootLayout->addWidget(mTitleBar);
     rootLayout->addWidget(toolBarContainer);
+    rootLayout->addWidget(toolBarShadow);
     rootLayout->addWidget(contentContainer, 1);
 
     setCentralWidget(central);
@@ -103,6 +109,10 @@ void MainWindow::setupConnects()
     connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged,      mThumbnailPanel,  &ThumbnailPanel::setCurrentSliceIndex);
     // 主窗口图像状态改变 -> 缩略图同步图像状态(invert/flip迅速跟进， WW/WL 延迟跟进)
     connect(mWorkSpaceWidget, &WorkSpaceWidget::stackDisplayParametersChanged, mThumbnailPanel,  &ThumbnailPanel::setDisplayParameters);
+
+    connect(mViewModeBar, &ViewModeBar::viewModeChanged, this, [](const QString &viewModeName) {
+        spdlog::info("Demo view mode switched to: {}", viewModeName.toStdString());
+    });
 
     connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);
