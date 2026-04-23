@@ -2,6 +2,6 @@ build/
 compile_commands.json
 AGENTS.md
 third_party/
-docs/
+docs/temp/
 scripts/
 .qtcreator/
