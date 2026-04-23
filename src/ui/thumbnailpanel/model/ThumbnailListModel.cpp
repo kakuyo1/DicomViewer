@@ -91,6 +91,24 @@ ThumbnailState ThumbnailListModel::thumbnailStateAt(int row) const
     return mItems.at(row).state;
 }
 
+int ThumbnailListModel::appliedDisplayRevisionAt(int row) const
+{
+    if (!isValidRow(row)) {
+        return -1;
+    }
+
+    return mItems.at(row).appliedDisplayRevision;
+}
+
+int ThumbnailListModel::loadingDisplayRevisionAt(int row) const
+{
+    if (!isValidRow(row)) {
+        return -1;
+    }
+
+    return mItems.at(row).loadingDisplayRevision;
+}
+
 QString ThumbnailListModel::filePathAt(int row) const
 {
     if (!isValidRow(row)) {
@@ -116,14 +134,14 @@ void ThumbnailListModel::clear()
 void ThumbnailListModel::invalidateAllThumbnails()
 {
     if (mItems.isEmpty()) {
-        ++mGeneration;
         return;
     }
 
-    ++mGeneration;
     for (ThumbnailItemData &item : mItems) {
-        item.state           = ThumbnailState::NotRequested;
-        item.thumbnailPixmap = createPlaceholderPixmap();
+        item.state                  = ThumbnailState::NotRequested;
+        item.appliedDisplayRevision = -1;
+        item.loadingDisplayRevision = -1;
+        item.thumbnailPixmap        = createPlaceholderPixmap();
     }
 
     const QModelIndex firstIndex = index(0, 0);
@@ -143,11 +161,12 @@ void ThumbnailListModel::invalidateThumbnailRange(int firstRow, int lastRow)
         return;
     }
 
-    ++mGeneration;
     for (int row = firstRow; row <= lastRow; ++row) {
         ThumbnailItemData &item = mItems[row];
-        item.state              = ThumbnailState::NotRequested;
-        item.thumbnailPixmap    = createPlaceholderPixmap();
+        item.state                  = ThumbnailState::NotRequested;
+        item.appliedDisplayRevision = -1;
+        item.loadingDisplayRevision = -1;
+        item.thumbnailPixmap        = createPlaceholderPixmap();
     }
 
     const QModelIndex firstIndex = index(firstRow, 0);
@@ -155,44 +174,53 @@ void ThumbnailListModel::invalidateThumbnailRange(int firstRow, int lastRow)
     emit dataChanged(firstIndex, lastIndex, {ThumbnailStateRole, ThumbnailPixmapRole});
 }
 
-void ThumbnailListModel::markThumbnailLoading(int row)
+void ThumbnailListModel::markThumbnailLoading(int row, int displayRevision)
 {
     if (!isValidRow(row)) {
         return;
     }
 
     ThumbnailItemData &item = mItems[row];
-    if (item.state == ThumbnailState::Loading) {
+    if (item.state == ThumbnailState::Loading && item.loadingDisplayRevision == displayRevision) {
         return;
     }
 
-    item.state = ThumbnailState::Loading;
+    item.state                  = ThumbnailState::Loading;
+    item.loadingDisplayRevision = displayRevision;                      // 记录最新的“请求” pixmap 版本
+
     const QModelIndex modelIndex = index(row, 0);
     emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole});     // 通知视图重绘
 }
 
-void ThumbnailListModel::setThumbnailReady(int row, const QPixmap &pixmap)
+void ThumbnailListModel::setThumbnailReady(int row, const QPixmap &pixmap, int displayRevision)
 {
     if (!isValidRow(row)) {
         return;
     }
 
     ThumbnailItemData &item = mItems[row];
-    item.state              = ThumbnailState::Ready;
-    item.thumbnailPixmap    = pixmap;
+    item.state                  = ThumbnailState::Ready;
+    item.thumbnailPixmap        = pixmap;
+    item.appliedDisplayRevision = displayRevision;
+    item.loadingDisplayRevision = -1;
 
     const QModelIndex modelIndex = index(row, 0);
     emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole, ThumbnailPixmapRole});    // 通知视图重绘
 }
 
-void ThumbnailListModel::setThumbnailFailed(int row)
+void ThumbnailListModel::setThumbnailFailed(int row, int displayRevision)
 {
     if (!isValidRow(row)) {
         return;
     }
 
     ThumbnailItemData &item = mItems[row];
-    item.state = ThumbnailState::Failed;
+    if (item.loadingDisplayRevision != displayRevision) {
+        return;
+    }
+
+    item.state                  = ThumbnailState::Failed;
+    item.loadingDisplayRevision = -1;
 
     const QModelIndex modelIndex = index(row, 0);
     emit dataChanged(modelIndex, modelIndex, {ThumbnailStateRole});     // 通知视图重绘

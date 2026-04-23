@@ -41,8 +41,8 @@ private:
     bool calculateVisibleRowRange(int *firstRow, int *lastRow, bool includePreload) const;
     void refreshVisibleThumbnails(bool includePreload, bool invalidateRange);
     void applyPendingWindowLevelToThumbnails();
-    void handleThumbnailLoaded(int row, int generation, const QImage &image);
-    void handleThumbnailFailed(int row, int generation);
+    void handleThumbnailLoaded(int row, int generation, int displayRevision, const QImage &image);
+    void handleThumbnailFailed(int row, int generation, int displayRevision);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -64,4 +64,5 @@ private:
     bool mFlipVerticalEnabled                      = false;
     double mPendingWindowCenter                    = 0.0;       // 用户正在拖
     double mPendingWindowWidth                     = 0.0;
+    int mCurrentDisplayRevision                    = 0;         // 当前请求的 pixmap 版本（辅助主视图与缩略图的图像状态同步）
 };

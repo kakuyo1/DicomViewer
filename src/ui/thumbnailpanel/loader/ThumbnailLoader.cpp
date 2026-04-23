@@ -12,6 +12,7 @@ constexpr int kThumbnailHeight = 112;
 ThumbnailLoadResult loadThumbnailImage(const SliceImageBuildInput &input,
                                        int row,
                                        int generation,
+                                       int displayRevision,
                                        double windowCenter,
                                        double windowWidth,
                                        bool invert,
@@ -19,8 +20,9 @@ ThumbnailLoadResult loadThumbnailImage(const SliceImageBuildInput &input,
                                        bool flipVertical)
 {
     ThumbnailLoadResult result;
-    result.row        = row;
-    result.generation = generation;
+    result.row             = row;
+    result.generation      = generation;
+    result.displayRevision = displayRevision;
 
     SliceImageBuildOptions buildOptions;
     buildOptions.windowCenter   = windowCenter;
@@ -54,6 +56,7 @@ ThumbnailLoader::~ThumbnailLoader()
 void ThumbnailLoader::requestThumbnail(int row,
                                        const SliceImageBuildInput &input,
                                        int generation,
+                                       int displayRevision,
                                        double windowCenter,
                                        double windowWidth,
                                        bool invert,
@@ -66,14 +69,14 @@ void ThumbnailLoader::requestThumbnail(int row,
         watcher->deleteLater();
 
         if (!result.success || result.image.isNull()) {
-            emit thumbnailFailed(result.row, result.generation);
+            emit thumbnailFailed(result.row, result.generation, result.displayRevision);
             return;
         }
 
-        emit thumbnailLoaded(result.row, result.generation, result.image);
+        emit thumbnailLoaded(result.row, result.generation, result.displayRevision, result.image);
     });
 
-    watcher->setFuture(QtConcurrent::run([input, row, generation, windowCenter, windowWidth, invert, flipHorizontal, flipVertical]() {
-        return loadThumbnailImage(input, row, generation, windowCenter, windowWidth, invert, flipHorizontal, flipVertical);
+    watcher->setFuture(QtConcurrent::run([input, row, generation, displayRevision, windowCenter, windowWidth, invert, flipHorizontal, flipVertical]() {
+        return loadThumbnailImage(input, row, generation, displayRevision, windowCenter, windowWidth, invert, flipHorizontal, flipVertical);
     }));
 }

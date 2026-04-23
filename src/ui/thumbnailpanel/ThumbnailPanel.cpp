@@ -121,6 +121,18 @@ void ThumbnailPanel::setCurrentSliceIndex(int sliceIndex)
     scrollTo(modelIndex, QAbstractItemView::PositionAtCenter);
 }
 
+/**
+ *  @note
+ *  主视图图像状态改变，缩略图如何跟进？
+ *      - 对于 invert/flip 这种频率不高的功能 -> 立刻同步
+ *      - 对于 WW/WL 这种频率高耗性能的功能    -> debounce 延迟同步
+ *  同步的流程为两大关键步骤，采用 DisplayRevision 进行 pixmap 版本管理。
+ *      - 主视图图像更新后     -> 立刻更新可视区域内的缩略图，其它区域暂时不管（希望用户不要动滚动条）
+ *      - 用户滑动缩略图滚动条  -> 更新最新可视区域内的缩略图
+ *  @footnote
+ *  现在满足用户滚到新区域时，新的可视区能自动纠正。
+ *  采用后台线程小批量提前补齐非可视区 pixmap 暂时不考虑。
+ */
 void ThumbnailPanel::setDisplayParameters(double windowCenter,
                                           double windowWidth,
                                           bool invert,
@@ -148,6 +160,7 @@ void ThumbnailPanel::setDisplayParameters(double windowCenter,
         mInvertEnabled         = invert;
         mFlipHorizontalEnabled = flipHorizontal;
         mFlipVerticalEnabled   = flipVertical;
+        ++mCurrentDisplayRevision;              // 图像状态变了 -> 更新 pixmap 版本
         mWindowLevelSyncTimer->stop();          // 防止之前的 ww/wl 延迟任务在未来突然触发，把现在的图覆盖掉
         refreshVisibleThumbnails(false, true);  // 只刷新当前可见，强制所有缩略图失效
         return;
@@ -171,14 +184,15 @@ void ThumbnailPanel::refreshFromSession()
         return;
     }
 
-    if (currentVolumeData != nullptr) {
-        mWindowCenter          = currentVolumeData->windowCenter;
-        mWindowWidth           = currentVolumeData->windowWidth;
-        mInvertEnabled         = false;
-        mFlipHorizontalEnabled = false;
-        mFlipVerticalEnabled   = false;
-        mPendingWindowCenter   = mWindowCenter;
-        mPendingWindowWidth    = mWindowWidth;
+    if (currentVolumeData != nullptr) { // 初始化各成员变量
+        mWindowCenter           = currentVolumeData->windowCenter;
+        mWindowWidth            = currentVolumeData->windowWidth;
+        mInvertEnabled          = false;
+        mFlipHorizontalEnabled  = false;
+        mFlipVerticalEnabled    = false;
+        mPendingWindowCenter    = mWindowCenter;
+        mPendingWindowWidth     = mWindowWidth;
+        mCurrentDisplayRevision = 0;
     }
 
     QVector<ThumbnailItemData> items;
@@ -300,6 +314,7 @@ void ThumbnailPanel::applyPendingWindowLevelToThumbnails()
 
     mWindowCenter = mPendingWindowCenter;
     mWindowWidth  = mPendingWindowWidth;
+    ++mCurrentDisplayRevision;              // 主视图图像状态变了 -> debounce 后更新一下缩略图的 pixmap 版本
     refreshVisibleThumbnails(false, true);  // 只刷新当前可见，强制所有缩略图失效
 }
 
@@ -317,22 +332,36 @@ void ThumbnailPanel::requestThumbnailRange(int firstRow, int lastRow)
     const int requestGeneration = mThumbnailListModel->generation();
     for (int row = firstRow; row <= lastRow; ++row) {
         const ThumbnailState state = mThumbnailListModel->thumbnailStateAt(row);
-        if (state == ThumbnailState::Ready || state == ThumbnailState::Loading) {
+        const int appliedDisplayRevision = mThumbnailListModel->appliedDisplayRevisionAt(row);
+        const int loadingDisplayRevision = mThumbnailListModel->loadingDisplayRevisionAt(row);
+        /**
+         *  @note 应该渲染的最新 pixmap 的两个条件：状态 Ready + Revision 最新
+         *        - `Ready   + appliedDisplayRevision == currentRevision` => 最新
+         *        - `Ready   + appliedDisplayRevision != currentRevision` => 有图，但已过期
+         *        - `Loading + loadingDisplayRevision == currentRevision` => 正在加载当前版本
+         *        - `Loading + loadingDisplayRevision != currentRevision` => 正在跑旧任务，应视为过期
+         */
+        if (state == ThumbnailState::Ready   && appliedDisplayRevision == mCurrentDisplayRevision) {
             continue;
         }
+        if (state == ThumbnailState::Loading && loadingDisplayRevision == mCurrentDisplayRevision) {
+            continue;
+        }
+
+        // 先把loading文字渲染上去，然后标记该缩略图的 pixmap 版本为最新的 DisplayVersion, 旧图如果存在则继续保留，直到新图完成
+        mThumbnailListModel->markThumbnailLoading(row, mCurrentDisplayRevision);
 
         const SliceImageBuildInput input = buildSliceImageInput(*currentVolumeData, row);
         if (!input.isValid()) {
-            mThumbnailListModel->setThumbnailFailed(row);
+            mThumbnailListModel->setThumbnailFailed(row, mCurrentDisplayRevision);
             continue;
         }
 
-        // 先把loading文字渲染上去
-        mThumbnailListModel->markThumbnailLoading(row);
         // 再渲染缩略图
         mThumbnailLoader->requestThumbnail(row,
                                            input,
                                            requestGeneration,
+                                           mCurrentDisplayRevision, // ！标记该缩略图的 pixmap 版本为最新的 DisplayVersion
                                            mWindowCenter,
                                            mWindowWidth,
                                            mInvertEnabled,
@@ -341,29 +370,30 @@ void ThumbnailPanel::requestThumbnailRange(int firstRow, int lastRow)
     }
 }
 
-void ThumbnailPanel::handleThumbnailLoaded(int row, int generation, const QImage &image)
+void ThumbnailPanel::handleThumbnailLoaded(int row, int generation, int displayRevision, const QImage &image)
 {
-    // 根据 generation 丢掉旧数据
-    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation()) {
+    // 根据 generation     丢掉旧数据（面向series）
+    // 根据 displayRevison 丢掉旧数据（面向主/缩同步）
+    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation() || displayRevision != mCurrentDisplayRevision) {
         return;
     }
 
     const QPixmap pixmap = QPixmap::fromImage(image);
     if (pixmap.isNull()) {
-        mThumbnailListModel->setThumbnailFailed(row);
+        mThumbnailListModel->setThumbnailFailed(row, displayRevision);
         return;
     }
 
-    mThumbnailListModel->setThumbnailReady(row, pixmap);
+    mThumbnailListModel->setThumbnailReady(row, pixmap, displayRevision);
 }
 
-void ThumbnailPanel::handleThumbnailFailed(int row, int generation)
+void ThumbnailPanel::handleThumbnailFailed(int row, int generation, int displayRevision)
 {
-    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation()) {
+    if (mThumbnailListModel == nullptr || generation != mThumbnailListModel->generation() || displayRevision != mCurrentDisplayRevision) {
         return;
     }
 
-    mThumbnailListModel->setThumbnailFailed(row);
+    mThumbnailListModel->setThumbnailFailed(row, displayRevision);
 }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)

@@ -7,9 +7,10 @@
 
 struct ThumbnailLoadResult
 {
-    int row        = -1;
-    int generation = -1;
-    bool success   = false;
+    int row             = -1;
+    int generation      = -1;
+    int displayRevision = -1;
+    bool success        = false;
     QImage image;
 };
 
@@ -24,6 +25,7 @@ public:
     void requestThumbnail(int row,
                           const SliceImageBuildInput &input,
                           int generation,
+                          int displayRevision,
                           double windowCenter,
                           double windowWidth,
                           bool invert,
@@ -31,6 +33,6 @@ public:
                           bool flipVertical);
 
 signals:
-    void thumbnailLoaded(int row, int generation, const QImage &image);
-    void thumbnailFailed(int row, int generation);
+    void thumbnailLoaded(int row, int generation, int displayRevision, const QImage &image);
+    void thumbnailFailed(int row, int generation, int displayRevision);
 };

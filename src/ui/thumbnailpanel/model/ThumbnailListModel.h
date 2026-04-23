@@ -34,16 +34,19 @@ public:
     int itemCount() const;
     int generation() const;
     ThumbnailState thumbnailStateAt(int row) const;
+    int appliedDisplayRevisionAt(int row) const;
+    int loadingDisplayRevisionAt(int row) const;
     QString filePathAt(int row) const;
 
     void setItems(const QVector<ThumbnailItemData> &items);
     void clear();
+
     void invalidateAllThumbnails();
     void invalidateThumbnailRange(int firstRow, int lastRow);
-    void markThumbnailLoading(int row);
 
-    void setThumbnailReady(int row, const QPixmap &pixmap);
-    void setThumbnailFailed(int row);
+    void markThumbnailLoading(int row, int displayRevision);
+    void setThumbnailReady(int row, const QPixmap &pixmap, int displayRevision);
+    void setThumbnailFailed(int row, int displayRevision);
 
 private:
     bool isValidRow(int row) const;
