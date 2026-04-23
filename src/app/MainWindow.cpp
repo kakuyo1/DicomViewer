@@ -44,6 +44,7 @@ void MainWindow::setupUi()
     mTitleBar->setBarHeight(40);
 
     auto *toolBarContainer = new QWidget(central);
+    toolBarContainer->setObjectName(QStringLiteral("toolBarContainer"));
     auto *toolBarLayout = new QHBoxLayout(toolBarContainer);
     toolBarLayout->setContentsMargins(16, 12, 16, 12);
     toolBarLayout->setSpacing(0);
@@ -54,11 +55,13 @@ void MainWindow::setupUi()
     toolBarLayout->addStretch();
 
     auto *contentContainer = new QWidget(central);
+    contentContainer->setObjectName(QStringLiteral("contentContainer"));
     auto *contentLayout = new QHBoxLayout(contentContainer);
     contentLayout->setContentsMargins(16, 0, 16, 16);
     contentLayout->setSpacing(16);
 
     auto *leftContainer = new QWidget(contentContainer);
+    leftContainer->setObjectName(QStringLiteral("leftContainer"));
     auto *leftLayout = new QVBoxLayout(leftContainer);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(0);

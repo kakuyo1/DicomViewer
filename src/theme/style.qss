@@ -1,36 +1,234 @@
+#mainWindowRoot {
+    background-color: #14181f;
+    color: #e7edf6;
+}
+
+#toolBarContainer,
+#contentContainer,
+#leftContainer,
+#stackToolBar,
+#viewModeBar,
+#thumbnailPanel,
 #titleBarWidget {
-    background-color: #171b22;
-    border-bottom: 1px solid #2c313c;
+    background-color: transparent;
+}
+
+QWidget {
+    color: #e7edf6;
+    font-family: "Noto Sans", "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 13px;
+}
+
+QToolTip {
+    color: #eef3fb;
+    background-color: #252b34;
+    border: 1px solid #394251;
+    padding: 4px 8px;
+}
+
+#titleBarWidget {
+    background-color: #181c23;
+    border-bottom: 1px solid #2d3440;
 }
 
 #titleBarLogoLabel {
-    color: #e7ebf3;
-    font-size: 14px;
-    font-weight: 600;
+    color: #eef2f8;
+    background-color: #262d38;
+    border: 1px solid #39404c;
+    border-radius: 8px;
 }
 
 #titleBarFileButton,
 #titleBarMinimizeButton,
 #titleBarMaximizeButton,
 #titleBarCloseButton {
-    color: #e7ebf3;
-    border: none;
-    border-radius: 6px;
+    color: #ebf1f9;
+    border: 1px solid transparent;
+    border-radius: 8px;
     padding: 0 10px;
-    background: transparent;
+    background-color: transparent;
 }
 
 #titleBarFileButton {
-    font-size: 14px;
-    font-weight: 500;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
 }
 
 #titleBarFileButton:hover,
 #titleBarMinimizeButton:hover,
 #titleBarMaximizeButton:hover {
-    background-color: #242a35;
+    background-color: #232934;
+    border-color: #343c49;
+}
+
+#titleBarFileButton:pressed,
+#titleBarMinimizeButton:pressed,
+#titleBarMaximizeButton:pressed {
+    background-color: #1e242d;
 }
 
 #titleBarCloseButton:hover {
-    background-color: #c42b1c;
+    background-color: #9e4039;
+    border-color: #bb5a53;
+}
+
+#titleBarCloseButton:pressed {
+    background-color: #853630;
+}
+
+#toolBarContainer {
+    background-color: #161a21;
+    border-top: 1px solid #202530;
+    border-bottom: 1px solid #2a313d;
+}
+
+#stackToolBar {
+    background-color: #181c23;
+    border: 1px solid #2e3541;
+    border-radius: 10px;
+}
+
+#stackToolBar QToolButton {
+    min-height: 34px;
+    padding: 0 14px;
+    color: #dce4ef;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+}
+
+#stackToolBar QToolButton:hover {
+    background-color: #232933;
+    border-color: #343d49;
+}
+
+#stackToolBar QToolButton:pressed {
+    background-color: #1c2129;
+}
+
+#stackToolBar QToolButton:checked {
+    color: #f4f8ff;
+    background-color: #2a3340;
+    border-color: #57749a;
+}
+
+#contentContainer {
+    background-color: #14181f;
+}
+
+#leftContainer {
+    border: none;
+}
+
+#viewModeBar {
+    background-color: transparent;
+}
+
+#viewModeBar QPushButton {
+    min-width: 132px;
+    min-height: 96px;
+    padding: 14px 12px;
+    color: #d8e0ea;
+    background-color: #232933;
+    border: 1px solid #323a47;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#viewModeBar QPushButton:hover:!disabled {
+    background-color: #2a313c;
+    border-color: #465265;
+}
+
+#viewModeBar QPushButton:pressed:!disabled {
+    background-color: #20262f;
+}
+
+#viewModeBar QPushButton:disabled {
+    color: #c9d0d9;
+    background-color: #222831;
+    border-color: #343c47;
+}
+
+#thumbnailPanel {
+    background-color: #181c23;
+    border: 1px solid #2d3440;
+    outline: none;
+    padding: 8px 6px;
+}
+
+#thumbnailPanel::item {
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+#thumbnailPanel::item:selected {
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    background-color: transparent;
+    width: 12px;
+    margin: 8px 2px 8px 2px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #46505f;
+    min-height: 36px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #596577;
+}
+
+QScrollBar::handle:vertical:pressed {
+    background-color: #6a788c;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical,
+QScrollBar:horizontal,
+QScrollBar::handle:horizontal,
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+    border: none;
+    height: 0;
+}
+
+QMessageBox {
+    background-color: #1b2028;
+}
+
+QMessageBox QLabel {
+    color: #e6edf7;
+}
+
+QMessageBox QPushButton {
+    min-width: 84px;
+    min-height: 30px;
+    padding: 0 14px;
+    color: #e7edf6;
+    background-color: #262d37;
+    border: 1px solid #3a4452;
+    border-radius: 6px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #2e3642;
+}
+
+QMessageBox QPushButton:pressed {
+    background-color: #232a33;
 }

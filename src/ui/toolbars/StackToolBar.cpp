@@ -17,6 +17,7 @@ StackToolBar::~StackToolBar()
 
 void StackToolBar::setupUi()
 {
+    setObjectName(QStringLiteral("stackToolBar"));
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMinimumHeight(52);
 

@@ -17,6 +17,7 @@ ViewModeBar::~ViewModeBar()
 
 void ViewModeBar::setupUi()
 {
+    setObjectName(QStringLiteral("viewModeBar"));
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     setFixedWidth(180);
 

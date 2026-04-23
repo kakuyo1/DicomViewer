@@ -139,9 +139,7 @@ void TitleBarWidget::setupUi()
     mFileButton = new QToolButton(this);
     mFileButton->setObjectName(QStringLiteral("titleBarFileButton"));
     mFileButton->setAutoRaise(true);
-    mFileButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     mFileButton->setText(QStringLiteral("File"));
-    mFileButton->setIcon(style()->standardIcon(QStyle::SP_DialogOpenButton));
     mFileButton->setCursor(Qt::PointingHandCursor);
     mFileButton->setFixedHeight(34);
 

@@ -40,6 +40,7 @@ ThumbnailPanel::~ThumbnailPanel()
 
 void ThumbnailPanel::setupUi()
 {
+    setObjectName(QStringLiteral("thumbnailPanel"));
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     setFixedWidth(220);
 
