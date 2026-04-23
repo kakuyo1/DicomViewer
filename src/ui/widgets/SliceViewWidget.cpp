@@ -138,6 +138,7 @@ void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData
 
     if (volumeChanged || !mWindowLevelInitialized) {
         resetWindowLevelToDefault();
+        emitDisplayParametersChanged();
     }
 
     if (volumeChanged) {
@@ -379,6 +380,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         mCurrentWindowCenter    = mDragStartWindowCenter - delta.y() * kWindowCenterSensitivity;
         mWindowLevelInitialized = true;
 
+        emitDisplayParametersChanged();
         renderCurrentSlice();
         event->accept();
         return;
@@ -486,12 +488,14 @@ void SliceViewWidget::setToolMode(StackToolMode mode)
 void SliceViewWidget::setInvertEnabled(bool enabled)
 {
     mInvertEnabled = enabled;
+    emitDisplayParametersChanged();
     renderCurrentSlice();
 }
 
 void SliceViewWidget::setFlipHorizontalEnabled(bool enabled)
 {
     mFlipHorizontalEnabled = enabled;
+    emitDisplayParametersChanged();
     clearMeasurement();
     renderCurrentSlice();
 }
@@ -499,6 +503,7 @@ void SliceViewWidget::setFlipHorizontalEnabled(bool enabled)
 void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
 {
     mFlipVerticalEnabled = enabled;
+    emitDisplayParametersChanged();
     clearMeasurement();
     renderCurrentSlice();
 }
@@ -514,7 +519,18 @@ void SliceViewWidget::resetViewState()
     mCameraStateInitialized = false;
     clearMeasurement();
     resetWindowLevelToDefault();
+    emitDisplayParametersChanged();
     renderCurrentSlice();
+}
+
+void SliceViewWidget::emitDisplayParametersChanged()
+{
+    emit displayParametersChanged(
+        mCurrentWindowCenter,
+        mCurrentWindowWidth,
+        mInvertEnabled,
+        mFlipHorizontalEnabled,
+        mFlipVerticalEnabled);
 }
 
 void SliceViewWidget::setupVtkPipeline()

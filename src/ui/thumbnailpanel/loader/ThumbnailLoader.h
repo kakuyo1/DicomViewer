@@ -21,7 +21,14 @@ public:
     explicit ThumbnailLoader(QObject *parent = nullptr);
     ~ThumbnailLoader();
 
-    void requestThumbnail(int row, const SliceImageBuildInput &input, int generation, double windowCenter, double windowWidth);
+    void requestThumbnail(int row,
+                          const SliceImageBuildInput &input,
+                          int generation,
+                          double windowCenter,
+                          double windowWidth,
+                          bool invert,
+                          bool flipHorizontal,
+                          bool flipVertical);
 
 signals:
     void thumbnailLoaded(int row, int generation, const QImage &image);

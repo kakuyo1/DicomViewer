@@ -44,6 +44,11 @@ public:
 
 signals:
     void sliceScrollRequested(int steps);
+    void displayParametersChanged(double windowCenter,
+                                  double windowWidth,
+                                  bool invert,
+                                  bool flipHorizontal,
+                                  bool flipVertical);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -67,6 +72,7 @@ private:
     void updateOverlayInfo();
     void renderCurrentSlice();
     void resetWindowLevelToDefault();
+    void emitDisplayParametersChanged();
 
 private:
     const DicomSeries *mCurrentSeries       = nullptr;

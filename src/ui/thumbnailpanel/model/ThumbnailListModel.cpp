@@ -1,6 +1,21 @@
 #include "ThumbnailListModel.h"
 
+#include <algorithm>
+
+#include <QColor>
 #include <QPixmap>
+
+namespace
+{
+
+QPixmap createPlaceholderPixmap()
+{
+    QPixmap placeholderPixmap(160, 112);
+    placeholderPixmap.fill(QColor(48, 52, 60));
+    return placeholderPixmap;
+}
+
+}
 
 ThumbnailListModel::ThumbnailListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -96,6 +111,48 @@ void ThumbnailListModel::setItems(const QVector<ThumbnailItemData> &items)
 void ThumbnailListModel::clear()
 {
     setItems({});
+}
+
+void ThumbnailListModel::invalidateAllThumbnails()
+{
+    if (mItems.isEmpty()) {
+        ++mGeneration;
+        return;
+    }
+
+    ++mGeneration;
+    for (ThumbnailItemData &item : mItems) {
+        item.state           = ThumbnailState::NotRequested;
+        item.thumbnailPixmap = createPlaceholderPixmap();
+    }
+
+    const QModelIndex firstIndex = index(0, 0);
+    const QModelIndex lastIndex  = index(mItems.size() - 1, 0);
+    emit dataChanged(firstIndex, lastIndex, {ThumbnailStateRole, ThumbnailPixmapRole});
+}
+
+void ThumbnailListModel::invalidateThumbnailRange(int firstRow, int lastRow)
+{
+    if (mItems.isEmpty()) {
+        return;
+    }
+
+    firstRow = std::max(0, firstRow);
+    lastRow  = std::min(lastRow, static_cast<int>(mItems.size()) - 1);
+    if (firstRow > lastRow) {
+        return;
+    }
+
+    ++mGeneration;
+    for (int row = firstRow; row <= lastRow; ++row) {
+        ThumbnailItemData &item = mItems[row];
+        item.state              = ThumbnailState::NotRequested;
+        item.thumbnailPixmap    = createPlaceholderPixmap();
+    }
+
+    const QModelIndex firstIndex = index(firstRow, 0);
+    const QModelIndex lastIndex  = index(lastRow, 0);
+    emit dataChanged(firstIndex, lastIndex, {ThumbnailStateRole, ThumbnailPixmapRole});
 }
 
 void ThumbnailListModel::markThumbnailLoading(int row)

@@ -9,16 +9,26 @@ namespace
 constexpr int kThumbnailWidth  = 160;
 constexpr int kThumbnailHeight = 112;
 
-ThumbnailLoadResult loadThumbnailImage(const SliceImageBuildInput &input, int row, int generation, double windowCenter, double windowWidth)
+ThumbnailLoadResult loadThumbnailImage(const SliceImageBuildInput &input,
+                                       int row,
+                                       int generation,
+                                       double windowCenter,
+                                       double windowWidth,
+                                       bool invert,
+                                       bool flipHorizontal,
+                                       bool flipVertical)
 {
     ThumbnailLoadResult result;
     result.row        = row;
     result.generation = generation;
 
     SliceImageBuildOptions buildOptions;
-    buildOptions.windowCenter = windowCenter;
-    buildOptions.windowWidth  = windowWidth;
-    buildOptions.outputSize   = QSize(kThumbnailWidth, kThumbnailHeight);
+    buildOptions.windowCenter   = windowCenter;
+    buildOptions.windowWidth    = windowWidth;
+    buildOptions.invert         = invert;
+    buildOptions.flipHorizontal = flipHorizontal;
+    buildOptions.flipVertical   = flipVertical;
+    buildOptions.outputSize     = QSize(kThumbnailWidth, kThumbnailHeight);
 
     const QImage image = buildSliceImage(input, buildOptions);
     if (image.isNull()) {
@@ -41,7 +51,14 @@ ThumbnailLoader::~ThumbnailLoader()
 {
 }
 
-void ThumbnailLoader::requestThumbnail(int row, const SliceImageBuildInput &input, int generation, double windowCenter, double windowWidth)
+void ThumbnailLoader::requestThumbnail(int row,
+                                       const SliceImageBuildInput &input,
+                                       int generation,
+                                       double windowCenter,
+                                       double windowWidth,
+                                       bool invert,
+                                       bool flipHorizontal,
+                                       bool flipVertical)
 {
     auto *watcher = new QFutureWatcher<ThumbnailLoadResult>(this);
     connect(watcher, &QFutureWatcher<ThumbnailLoadResult>::finished, this, [this, watcher]() {
@@ -56,7 +73,7 @@ void ThumbnailLoader::requestThumbnail(int row, const SliceImageBuildInput &inpu
         emit thumbnailLoaded(result.row, result.generation, result.image);
     });
 
-    watcher->setFuture(QtConcurrent::run([input, row, generation, windowCenter, windowWidth]() {
-        return loadThumbnailImage(input, row, generation, windowCenter, windowWidth);
+    watcher->setFuture(QtConcurrent::run([input, row, generation, windowCenter, windowWidth, invert, flipHorizontal, flipVertical]() {
+        return loadThumbnailImage(input, row, generation, windowCenter, windowWidth, invert, flipHorizontal, flipVertical);
     }));
 }

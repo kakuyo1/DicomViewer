@@ -30,6 +30,7 @@ void StackPage::setupUi()
     rootLayout->addWidget(mSliceViewWidget);
 
     connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested, this, &StackPage::handleSliceScrollRequested);
+    connect(mSliceViewWidget, &SliceViewWidget::displayParametersChanged, this, &StackPage::displayParametersChanged);
 }
 
 void StackPage::setViewerSession(ViewerSession *viewerSession)

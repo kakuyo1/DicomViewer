@@ -38,7 +38,10 @@ public:
 
     void setItems(const QVector<ThumbnailItemData> &items);
     void clear();
+    void invalidateAllThumbnails();
+    void invalidateThumbnailRange(int firstRow, int lastRow);
     void markThumbnailLoading(int row);
+
     void setThumbnailReady(int row, const QPixmap &pixmap);
     void setThumbnailFailed(int row);
 

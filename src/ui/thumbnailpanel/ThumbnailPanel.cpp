@@ -22,7 +22,8 @@
 namespace
 {
 
-constexpr int kPreloadRowCount = 4;
+constexpr int kPreloadRowCount        = 4;
+constexpr int kWindowLevelSyncDelayMs = 150;
 
 }
 
@@ -53,6 +54,10 @@ void ThumbnailPanel::setupUi()
     mThumbnailListModel    = new ThumbnailListModel(this);
     mThumbnailItemDelegate = new ThumbnailItemDelegate(this);
     mThumbnailLoader       = new ThumbnailLoader(this);
+
+    mWindowLevelSyncTimer  = new QTimer(this);
+    mWindowLevelSyncTimer->setSingleShot(true);
+
     setModel(mThumbnailListModel);
     setItemDelegate(mThumbnailItemDelegate);
 
@@ -62,6 +67,8 @@ void ThumbnailPanel::setupUi()
     });
     connect(mThumbnailLoader, &ThumbnailLoader::thumbnailLoaded, this, &ThumbnailPanel::handleThumbnailLoaded);
     connect(mThumbnailLoader, &ThumbnailLoader::thumbnailFailed, this, &ThumbnailPanel::handleThumbnailFailed);
+
+    connect(mWindowLevelSyncTimer, &QTimer::timeout, this, &ThumbnailPanel::applyPendingWindowLevelToThumbnails);
 }
 
 void ThumbnailPanel::setViewerSession(ViewerSession *viewerSession)
@@ -113,6 +120,42 @@ void ThumbnailPanel::setCurrentSliceIndex(int sliceIndex)
     scrollTo(modelIndex, QAbstractItemView::PositionAtCenter);
 }
 
+void ThumbnailPanel::setDisplayParameters(double windowCenter,
+                                          double windowWidth,
+                                          bool invert,
+                                          bool flipHorizontal,
+                                          bool flipVertical)
+{
+    if (mThumbnailListModel == nullptr || mThumbnailLoader == nullptr) {
+        return;
+    }
+
+    const bool windowLevelChanged = (mWindowCenter != windowCenter || mWindowWidth != windowWidth);
+    const bool orientationChanged = (mInvertEnabled != invert
+                                     || mFlipHorizontalEnabled != flipHorizontal
+                                     || mFlipVerticalEnabled != flipVertical);
+    if (!windowLevelChanged && !orientationChanged) {
+        return;
+    }
+
+    mPendingWindowCenter = windowCenter;
+    mPendingWindowWidth  = windowWidth;
+
+    if (orientationChanged) { // 1.立即刷新的情况（invert/flip）
+        mWindowCenter          = windowCenter;
+        mWindowWidth           = windowWidth;
+        mInvertEnabled         = invert;
+        mFlipHorizontalEnabled = flipHorizontal;
+        mFlipVerticalEnabled   = flipVertical;
+        mWindowLevelSyncTimer->stop();          // 防止之前的 ww/wl 延迟任务在未来突然触发，把现在的图覆盖掉
+        refreshVisibleThumbnails(false, true);  // 只刷新当前可见，强制所有缩略图失效
+        return;
+    }
+
+    // 防抖：如果用户在短时间内拖个不停，当前timer->start会一直重置，延迟applyPendingWindowLevelToThumbnails的触发
+    mWindowLevelSyncTimer->start(kWindowLevelSyncDelayMs); // 2.延迟刷新的情况
+}
+
 void ThumbnailPanel::refreshFromSession()
 {
     if (mThumbnailListModel == nullptr || mViewerSession == nullptr) {
@@ -121,9 +164,20 @@ void ThumbnailPanel::refreshFromSession()
     }
 
     const DicomSeries *currentSeries = mViewerSession->currentSeries();
+    const VolumeData  *currentVolumeData = mViewerSession->currentVolumeData();
     if (currentSeries == nullptr || currentSeries->slices.isEmpty()) {
         clearItems();
         return;
+    }
+
+    if (currentVolumeData != nullptr) {
+        mWindowCenter          = currentVolumeData->windowCenter;
+        mWindowWidth           = currentVolumeData->windowWidth;
+        mInvertEnabled         = false;
+        mFlipHorizontalEnabled = false;
+        mFlipVerticalEnabled   = false;
+        mPendingWindowCenter   = mWindowCenter;
+        mPendingWindowWidth    = mWindowWidth;
     }
 
     QVector<ThumbnailItemData> items;
@@ -165,6 +219,9 @@ void ThumbnailPanel::clearItems()
     if (mThumbnailListModel != nullptr) {
         mThumbnailListModel->clear();
     }
+    if (mWindowLevelSyncTimer != nullptr) {
+        mWindowLevelSyncTimer->stop();
+    }
     mPendingSliceIndex = -1;
     clearSelection();
 }
@@ -180,13 +237,19 @@ void ThumbnailPanel::handleItemClicked(const QModelIndex &index)
 
 void ThumbnailPanel::requestVisibleThumbnails()
 {
+    refreshVisibleThumbnails(true, false);
+}
+
+// includePreload设置false表示只刷新可见区域，kPreloadRowCount作废，适合缩略图同步主视图图像状态
+bool ThumbnailPanel::calculateVisibleRowRange(int *firstRow, int *lastRow, bool includePreload) const
+{
     if (mThumbnailListModel == nullptr || mThumbnailLoader == nullptr) {
-        return;
+        return false;
     }
 
     const int itemCount = mThumbnailListModel->itemCount();
     if (itemCount <= 0) {
-        return;
+        return false;
     }
 
     // 取视口中间的 x 坐标（x 不重要（随便取一列））
@@ -196,8 +259,9 @@ void ThumbnailPanel::requestVisibleThumbnails()
     const QModelIndex lastVisibleIndex  = indexAt(QPoint(sampleX, viewport()->height() - 1));
 
     if (!firstVisibleIndex.isValid() && !lastVisibleIndex.isValid()) {
-        requestThumbnailRange(0, std::min(itemCount - 1, kPreloadRowCount * 2));  // 直接加载前 N 个
-        return;
+        *firstRow = 0;
+        *lastRow  = includePreload ? std::min(itemCount - 1, kPreloadRowCount * 2) : 0;
+        return true;
     }
 
     // 如果拿不到 → 默认 0
@@ -205,10 +269,37 @@ void ThumbnailPanel::requestVisibleThumbnails()
     // 如果拿不到 → 默认最后一行
     const int lastVisibleRow  = lastVisibleIndex.isValid() ? lastVisibleIndex.row() : (itemCount - 1);
     // 预加载
-    const int requestFirstRow = std::max(0, firstVisibleRow - kPreloadRowCount);
-    const int requestLastRow  = std::min(itemCount - 1, lastVisibleRow + kPreloadRowCount);
+    *firstRow = includePreload ? std::max(0, firstVisibleRow - kPreloadRowCount) : firstVisibleRow;
+    *lastRow  = includePreload ? std::min(itemCount - 1, lastVisibleRow + kPreloadRowCount) : lastVisibleRow;
 
-    requestThumbnailRange(requestFirstRow, requestLastRow);
+    return true;
+}
+
+void ThumbnailPanel::refreshVisibleThumbnails(bool includePreload, bool invalidateRange)
+{
+    int firstRow = 0;
+    int lastRow  = -1;
+    if (!calculateVisibleRowRange(&firstRow, &lastRow, includePreload)) {
+        return;
+    }
+
+    if (invalidateRange && mThumbnailListModel != nullptr) {
+        mThumbnailListModel->invalidateThumbnailRange(firstRow, lastRow); // UI 立即变灰（占位图），旧任务全部作废（generation）
+    }
+    // 重新请求缩略图
+    requestThumbnailRange(firstRow, lastRow);
+}
+
+void ThumbnailPanel::applyPendingWindowLevelToThumbnails()
+{
+    // 判断是否真的变了，若没变，直接跳过
+    if (mWindowCenter == mPendingWindowCenter && mWindowWidth == mPendingWindowWidth) {
+        return;
+    }
+
+    mWindowCenter = mPendingWindowCenter;
+    mWindowWidth  = mPendingWindowWidth;
+    refreshVisibleThumbnails(false, true);  // 只刷新当前可见，强制所有缩略图失效
 }
 
 void ThumbnailPanel::requestThumbnailRange(int firstRow, int lastRow)
@@ -238,7 +329,14 @@ void ThumbnailPanel::requestThumbnailRange(int firstRow, int lastRow)
         // 先把loading文字渲染上去
         mThumbnailListModel->markThumbnailLoading(row);
         // 再渲染缩略图
-        mThumbnailLoader->requestThumbnail(row, input, requestGeneration, currentVolumeData->windowCenter, currentVolumeData->windowWidth);
+        mThumbnailLoader->requestThumbnail(row,
+                                           input,
+                                           requestGeneration,
+                                           mWindowCenter,
+                                           mWindowWidth,
+                                           mInvertEnabled,
+                                           mFlipHorizontalEnabled,
+                                           mFlipVerticalEnabled);
     }
 }
 

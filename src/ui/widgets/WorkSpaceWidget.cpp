@@ -19,6 +19,7 @@ void WorkSpaceWidget::setupUi()
 
     mStackPage = new StackPage(this);
     connect(mStackPage, &StackPage::currentSliceChanged, this, &WorkSpaceWidget::currentStackSliceChanged);
+    connect(mStackPage, &StackPage::displayParametersChanged, this, &WorkSpaceWidget::stackDisplayParametersChanged);
     addWidget(mStackPage);
     setCurrentWidget(mStackPage);
 }

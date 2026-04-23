@@ -95,9 +95,11 @@ void MainWindow::setupConnects()
     connect(mStackToolBar, &StackToolBar::resetTriggered,           mWorkSpaceWidget, &WorkSpaceWidget::resetStackView);
 
     // 用户点击缩略图切片 -> 主窗口渲染对应切片
-    connect(mThumbnailPanel,  &ThumbnailPanel::sliceActivated,            mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
+    connect(mThumbnailPanel,  &ThumbnailPanel::sliceActivated,                 mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
     // 主窗口滚轮切换切片 -> 缩略图滚动至对应切片
-    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged, mThumbnailPanel,  &ThumbnailPanel::setCurrentSliceIndex);
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged,      mThumbnailPanel,  &ThumbnailPanel::setCurrentSliceIndex);
+    // 主窗口图像状态改变 -> 缩略图同步图像状态(invert/flip迅速跟进， WW/WL 延迟跟进)
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::stackDisplayParametersChanged, mThumbnailPanel,  &ThumbnailPanel::setDisplayParameters);
 
     connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);

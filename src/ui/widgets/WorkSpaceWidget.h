@@ -25,6 +25,11 @@ public:
 
 signals:
     void currentStackSliceChanged(int sliceIndex);
+    void stackDisplayParametersChanged(double windowCenter,
+                                       double windowWidth,
+                                       bool invert,
+                                       bool flipHorizontal,
+                                       bool flipVertical);
 
 private:
     void setupUi();
