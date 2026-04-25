@@ -9,6 +9,7 @@
 
 #include <vtkSmartPointer.h>
 
+#include "core/model/volume/SliceOrientation.h"
 #include "ui/toolbars/StackToolMode.h"
 
 class DicomSeries;
@@ -34,6 +35,7 @@ public:
     ~SliceViewWidget();
 
     void showAxialSlice(const DicomSeries &series, const VolumeData &volumeData, int sliceIndex);
+    void showSlice(const DicomSeries &series, const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex);
     void clearDisplay();
 
     void setToolMode(StackToolMode mode);
@@ -43,6 +45,7 @@ public:
     void resetViewState();
 
 signals:
+    void activated();
     void sliceScrollRequested(int steps);
     void displayParametersChanged(double windowCenter,
                                   double windowWidth,
@@ -78,7 +81,12 @@ private:
     const DicomSeries *mCurrentSeries       = nullptr;
     QString mCurrentSeriesInstanceUid;
     const VolumeData  *mCurrentVolumeData   = nullptr;
+    SliceOrientation mCurrentOrientation    = SliceOrientation::Axial;
     int mCurrentSliceIndex                  = -1;
+    int mCurrentImageWidth                  = 0;
+    int mCurrentImageHeight                 = 0;
+    double mCurrentImageSpacingX            = 1.0;
+    double mCurrentImageSpacingY            = 1.0;
 
     StackToolMode mToolMode                 = StackToolMode::Pan;
 

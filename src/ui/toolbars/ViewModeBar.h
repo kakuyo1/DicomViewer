@@ -2,6 +2,8 @@
 
 #include <QWidget>
 
+#include "ui/model/ViewMode.h"
+
 class QButtonGroup;
 class QToolButton;
 
@@ -14,7 +16,7 @@ public:
     ~ViewModeBar();
 
 signals:
-    void viewModeChanged(const QString &viewModeName);
+    void viewModeChanged(ViewMode mode);
 
 private:
     void setupUi();

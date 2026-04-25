@@ -2,9 +2,12 @@
 
 #include <QStackedWidget>
 
-#include "../pages/StackPage.h"
+#include "ui/model/ViewMode.h"
 #include "ui/toolbars/StackToolMode.h"
 
+class StackPage;
+class MPRPage;
+class VRPage;
 class ViewerSession;
 
 class WorkSpaceWidget : public QStackedWidget
@@ -15,7 +18,16 @@ public:
     explicit WorkSpaceWidget(QWidget *parent = nullptr);
     ~WorkSpaceWidget();
 
-    void setViewerSession(ViewerSession *viewerSession);
+    void     setViewerSession(ViewerSession *viewerSession);
+    void     setViewMode(ViewMode mode);
+    ViewMode currentViewMode() const;
+
+    void setToolMode(StackToolMode mode);
+    void triggerInvert();
+    void triggerFlipHorizontal();
+    void triggerFlipVertical();
+    void resetCurrentView();
+
     void setCurrentStackSliceIndex(int sliceIndex);
     void setStackToolMode(StackToolMode mode);
     void triggerStackInvert();
@@ -24,17 +36,21 @@ public:
     void resetStackView();
 
 signals:
+    void currentViewModeChanged(ViewMode mode);
     void currentStackSliceChanged(int sliceIndex);
     void stackDisplayParametersChanged(double windowCenter,
                                        double windowWidth,
-                                       bool invert,
-                                       bool flipHorizontal,
-                                       bool flipVertical);
+                                       bool   invert,
+                                       bool   flipHorizontal,
+                                       bool   flipVertical);
 
 private:
     void setupUi();
 
 private:
-    ViewerSession *mViewerSession = nullptr;
-    StackPage     *mStackPage     = nullptr;
+    ViewerSession *mViewerSession   = nullptr;
+    StackPage     *mStackPage       = nullptr;
+    MPRPage       *mMPRPage         = nullptr;
+    VRPage        *mVRPage          = nullptr;
+    ViewMode       mCurrentViewMode = ViewMode::Stack;
 };

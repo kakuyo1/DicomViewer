@@ -9,7 +9,56 @@ namespace
 
 using WindowLevelLut = std::array<unsigned char, 65536>;
 
-template<typename PixelAccessor> // 像素读取函数
+int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
+{
+    if (orientation == SliceOrientation::Axial) {
+        return volumeData.depth;
+    }
+    if (orientation == SliceOrientation::Coronal) {
+        return volumeData.height;
+    }
+    if (orientation == SliceOrientation::Sagittal) {
+        return volumeData.width;
+    }
+    return 0;
+}
+
+void setupInputGeometry(const VolumeData &volumeData, SliceOrientation orientation, SliceImageBuildInput *input)
+{
+    if (input == nullptr) {
+        return;
+    }
+
+    if (orientation == SliceOrientation::Axial) {
+        input->width    = volumeData.width;
+        input->height   = volumeData.height;
+        input->spacingX = volumeData.spacingX;
+        input->spacingY = volumeData.spacingY;
+        return;
+    }
+
+    if (orientation == SliceOrientation::Coronal) {
+        input->width    = volumeData.width;
+        input->height   = volumeData.depth;
+        input->spacingX = volumeData.spacingX;
+        input->spacingY = volumeData.spacingZ;
+        return;
+    }
+
+    if (orientation == SliceOrientation::Sagittal) {
+        input->width    = volumeData.height;
+        input->height   = volumeData.depth;
+        input->spacingX = volumeData.spacingY;
+        input->spacingY = volumeData.spacingZ;
+    }
+}
+
+qint16 voxelAt(const VolumeData &volumeData, int x, int y, int z)
+{
+    return volumeData.voxels[z * volumeData.width * volumeData.height + y * volumeData.width + x];
+}
+
+template <typename PixelAccessor> // 像素读取函数
 QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixelAccessor, bool hasPixelPaddingValue, qint16 pixelPaddingValue, bool hasPixelPaddingRangeLimit, qint16 pixelPaddingRangeLimit, const SliceImageBuildOptions &options)
 {
     if (width <= 0 || height <= 0) {
@@ -40,18 +89,18 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
             /** @note i 从 0 到 65535，覆盖所有16位整数的位模式
                       rawIndex 将 i 视为无符号16位整数的数值 */
             const quint16 rawIndex = static_cast<quint16>(i);
-            qint16 value = 0;
+            qint16        value    = 0;
             std::memcpy(&value, &rawIndex, sizeof(value)); // unsigned -> signed
 
             const double normalized = (static_cast<double>(value) - lower) / denominator;
             const double clamped    = std::clamp(normalized, 0.0, 1.0);
-            table[rawIndex] = static_cast<unsigned char>(clamped * 255.0);
+            table[rawIndex]         = static_cast<unsigned char>(clamped * 255.0);
         }
 
         return table;
     }();
 
-    const bool hasPadding     = hasPixelPaddingValue;
+    const bool   hasPadding   = hasPixelPaddingValue;
     const qint16 paddingValue = pixelPaddingValue;
     const qint16 paddingMin   = hasPixelPaddingRangeLimit ? std::min(pixelPaddingValue, pixelPaddingRangeLimit) : 0;
     const qint16 paddingMax   = hasPixelPaddingRangeLimit ? std::max(pixelPaddingValue, pixelPaddingRangeLimit) : 0;
@@ -64,7 +113,7 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
 
     if (!hasPadding) { /// no padding
         for (int y = 0; y < height; ++y) {
-            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            uchar *scanLine = image.scanLine(y); // 指向第 y 行的内存
             /**
              *  @note DICOM坐标系原点在左上角， 与 Qt 一致
              */
@@ -81,15 +130,15 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
         }
     } else if (!hasPixelPaddingRangeLimit) { /// single padding value
         for (int y = 0; y < height; ++y) {
-            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            uchar *scanLine = image.scanLine(y); // 指向第 y 行的内存
             /**
              *  @note DICOM坐标系原点在左上角， 与 Qt 一致
              */
             const int sampleY = options.flipVertical ? (height - 1 - y) : y;
             for (int x = 0; x < width; ++x) {
-                const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
-                const qint16 pixelValue = pixelAccessor(sampleX, sampleY);
-                unsigned char grayValue = 0;
+                const int     sampleX    = options.flipHorizontal ? (width - 1 - x) : x;
+                const qint16  pixelValue = pixelAccessor(sampleX, sampleY);
+                unsigned char grayValue  = 0;
                 // 只有不等于填充值的像素才映射
                 if (pixelValue != paddingValue) {
                     grayValue = lut[static_cast<quint16>(pixelValue)];
@@ -102,15 +151,15 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
         }
     } else { /// padding range
         for (int y = 0; y < height; ++y) {
-            uchar *scanLine = image.scanLine(y);    // 指向第 y 行的内存
+            uchar *scanLine = image.scanLine(y); // 指向第 y 行的内存
             /**
              *  @note DICOM坐标系原点在左上角， 与 Qt 一致
              */
             const int sampleY = options.flipVertical ? (height - 1 - y) : y;
             for (int x = 0; x < width; ++x) {
-                const int sampleX = options.flipHorizontal ? (width - 1 - x) : x;
-                const qint16 pixelValue = pixelAccessor(sampleX, sampleY);
-                unsigned char grayValue = 0;
+                const int     sampleX    = options.flipHorizontal ? (width - 1 - x) : x;
+                const qint16  pixelValue = pixelAccessor(sampleX, sampleY);
+                unsigned char grayValue  = 0;
                 // 像素值在[paddingMin, paddingMax]范围内视为填充
                 if (pixelValue < paddingMin || pixelValue > paddingMax) {
                     grayValue = lut[static_cast<quint16>(pixelValue)];
@@ -134,48 +183,70 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
 
 SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData, int sliceIndex)
 {
+    return buildSliceImageInput(volumeData, SliceOrientation::Axial, sliceIndex);
+}
+
+SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex)
+{
     SliceImageBuildInput input;
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= volumeData.depth) {
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
         return input;
     }
 
-    const int slicePixelCount = volumeData.width * volumeData.height;
-    const int sliceOffset = sliceIndex * slicePixelCount;
-    if (sliceOffset < 0 || sliceOffset + slicePixelCount > volumeData.voxels.size()) {
+    setupInputGeometry(volumeData, orientation, &input);
+    if (input.width <= 0 || input.height <= 0) {
         return input;
     }
 
-    input.width = volumeData.width;
-    input.height = volumeData.height;
-    input.hasPixelPaddingValue = volumeData.hasPixelPaddingValue;
-    input.pixelPaddingValue = volumeData.pixelPaddingValue;
+    input.hasPixelPaddingValue      = volumeData.hasPixelPaddingValue;
+    input.pixelPaddingValue         = volumeData.pixelPaddingValue;
     input.hasPixelPaddingRangeLimit = volumeData.hasPixelPaddingRangeLimit;
-    input.pixelPaddingRangeLimit = volumeData.pixelPaddingRangeLimit;
-    // 拿到单片图片像素
-    input.pixels = QVector<qint16>(volumeData.voxels.begin() + sliceOffset, volumeData.voxels.begin() + sliceOffset + slicePixelCount);
+    input.pixelPaddingRangeLimit    = volumeData.pixelPaddingRangeLimit;
+
+    input.pixels.resize(input.width * input.height);
+    for (int y = 0; y < input.height; ++y) {
+        for (int x = 0; x < input.width; ++x) {
+            if (orientation == SliceOrientation::Axial) {
+                input.pixels[y * input.width + x] = voxelAt(volumeData, x, y, sliceIndex);
+            } else if (orientation == SliceOrientation::Coronal) {
+                input.pixels[y * input.width + x] = voxelAt(volumeData, x, sliceIndex, y);
+            } else if (orientation == SliceOrientation::Sagittal) {
+                input.pixels[y * input.width + x] = voxelAt(volumeData, sliceIndex, x, y);
+            }
+        }
+    }
     return input;
 }
 
 /// for SliceViewWidget ，直接读 VolumeData，不拷贝，线程不安全
 QImage buildSliceImage(const VolumeData &volumeData, int sliceIndex, const SliceImageBuildOptions &options)
 {
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= volumeData.depth) {
+    return buildSliceImage(volumeData, SliceOrientation::Axial, sliceIndex, options);
+}
+
+QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex, const SliceImageBuildOptions &options)
+{
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
         return {};
     }
 
-    const int width = volumeData.width;
-    const int height = volumeData.height;
-    const int slicePixelCount = width * height;
-    const int sliceOffset = sliceIndex * slicePixelCount;
-    if (sliceOffset < 0 || sliceOffset + slicePixelCount > volumeData.voxels.size()) {
+    SliceImageBuildInput geometry;
+    setupInputGeometry(volumeData, orientation, &geometry);
+    if (geometry.width <= 0 || geometry.height <= 0) {
         return {};
     }
 
     return buildSliceImageInternal(
-        width,
-        height,
-        [&volumeData, sliceOffset, width](int x, int y) {
-            return volumeData.voxels[sliceOffset + y * width + x];
+        geometry.width,
+        geometry.height,
+        [&volumeData, orientation, sliceIndex](int x, int y) {
+            if (orientation == SliceOrientation::Axial) {
+                return voxelAt(volumeData, x, y, sliceIndex);
+            }
+            if (orientation == SliceOrientation::Coronal) {
+                return voxelAt(volumeData, x, sliceIndex, y);
+            }
+            return voxelAt(volumeData, sliceIndex, x, y);
         },
         volumeData.hasPixelPaddingValue,
         volumeData.pixelPaddingValue,

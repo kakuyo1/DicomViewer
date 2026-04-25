@@ -21,6 +21,7 @@
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
 #include "core/worker/SliceImageBuilder.h"
+#include "common/Util.h"
 #include "ui/model/OverlayInfo.h"
 #include "ui/widgets/ImageOverlayWidget.h"
 
@@ -32,44 +33,67 @@ constexpr double kMinimumZoomFactor             = 0.1;
 constexpr double kMaximumZoomFactor             = 20.0;
 constexpr double kMeasurementTickSpacingMm      = 20.0;
 
-QString formatDicomDate(const QString &rawDate)
+int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
 {
-    if (rawDate.size() != 8) {
-        return rawDate;
+    if (orientation == SliceOrientation::Axial) {
+        return volumeData.depth;
     }
-
-    return QStringLiteral("%1-%2-%3").arg(rawDate.mid(0, 4), rawDate.mid(4, 2), rawDate.mid(6, 2));
+    if (orientation == SliceOrientation::Coronal) {
+        return volumeData.height;
+    }
+    if (orientation == SliceOrientation::Sagittal) {
+        return volumeData.width;
+    }
+    return 0;
 }
 
-QString formatDicomTime(const QString &rawTime)
+void setupSliceGeometry(const VolumeData &volumeData,
+                        SliceOrientation  orientation,
+                        int              *width,
+                        int              *height,
+                        double           *spacingX,
+                        double           *spacingY)
 {
-    if (rawTime.size() != 6) {
-        return rawTime;
+    if (width == nullptr || height == nullptr || spacingX == nullptr || spacingY == nullptr) {
+        return;
     }
 
-    return QStringLiteral("%1:%2:%3").arg(rawTime.mid(0, 2), rawTime.mid(2, 2), rawTime.mid(4, 2));
+    if (orientation == SliceOrientation::Axial) {
+        *width    = volumeData.width;
+        *height   = volumeData.height;
+        *spacingX = volumeData.spacingX;
+        *spacingY = volumeData.spacingY;
+        return;
+    }
+
+    if (orientation == SliceOrientation::Coronal) {
+        *width    = volumeData.width;
+        *height   = volumeData.depth;
+        *spacingX = volumeData.spacingX;
+        *spacingY = volumeData.spacingZ;
+        return;
+    }
+
+    if (orientation == SliceOrientation::Sagittal) {
+        *width    = volumeData.height;
+        *height   = volumeData.depth;
+        *spacingX = volumeData.spacingY;
+        *spacingY = volumeData.spacingZ;
+    }
 }
 
-QString buildSexAgeText(const DicomSliceInfo &sliceInfo)
+QString orientationText(SliceOrientation orientation)
 {
-    QStringList parts;
-    if (!sliceInfo.patientSex.isEmpty()) {
-        parts.push_back(sliceInfo.patientSex);
+    if (orientation == SliceOrientation::Axial) {
+        return QStringLiteral("Axial");
     }
-    if (!sliceInfo.patientAge.isEmpty()) {
-        parts.push_back(sliceInfo.patientAge);
+    if (orientation == SliceOrientation::Coronal) {
+        return QStringLiteral("Coronal");
     }
-    return parts.join(QStringLiteral(" / "));
-}
-
-QString formatSlicePositionText(const DicomSliceInfo &sliceInfo)
-{
-    if (sliceInfo.hasImagePositionPatient) {
-        return QStringLiteral("Location: %1 mm").arg(sliceInfo.imagePositionPatient.z, 0, 'f', 2);
-    } else if (sliceInfo.hasSliceLocation) {
-        return QStringLiteral("Location: %1 mm").arg(sliceInfo.sliceLocation, 0, 'f', 2);
+    if (orientation == SliceOrientation::Sagittal) {
+        return QStringLiteral("Sagittal");
     }
-    return {};
+    return QStringLiteral("Unknown");
 }
 
 /** @note 空操作 interactor style，用来清空原生VTK Interactor的键鼠操作，不能直接disable interactor,因为它包含VTK的事件循环，会直接黑屏！ */
@@ -79,18 +103,30 @@ public:
     static StackNoOpInteractorStyle *New();
     vtkTypeMacro(StackNoOpInteractorStyle, vtkInteractorStyleUser);
 
-    void OnLeftButtonDown() override {}
-    void OnLeftButtonUp() override {}
-    void OnMiddleButtonDown() override {}
-    void OnMiddleButtonUp() override {}
-    void OnRightButtonDown() override {}
-    void OnRightButtonUp() override {}
-    void OnMouseMove() override {}
-    void OnMouseWheelForward() override {}
-    void OnMouseWheelBackward() override {}
-    void OnChar() override {}
-    void OnKeyPress() override {}
-    void OnKeyRelease() override {}
+    void OnLeftButtonDown() override
+    {}
+    void OnLeftButtonUp() override
+    {}
+    void OnMiddleButtonDown() override
+    {}
+    void OnMiddleButtonUp() override
+    {}
+    void OnRightButtonDown() override
+    {}
+    void OnRightButtonUp() override
+    {}
+    void OnMouseMove() override
+    {}
+    void OnMouseWheelForward() override
+    {}
+    void OnMouseWheelBackward() override
+    {}
+    void OnChar() override
+    {}
+    void OnKeyPress() override
+    {}
+    void OnKeyRelease() override
+    {}
 };
 
 vtkStandardNewMacro(StackNoOpInteractorStyle);
@@ -118,30 +154,36 @@ SliceViewWidget::SliceViewWidget(QWidget *parent)
 
 SliceViewWidget::~SliceViewWidget()
 {
-
 }
 
 void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData &volumeData, int sliceIndex)
 {
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= volumeData.depth) {
+    showSlice(series, volumeData, SliceOrientation::Axial, sliceIndex);
+}
+
+void SliceViewWidget::showSlice(const DicomSeries &series, const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex)
+{
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
         clearDisplay();
         return;
     }
 
-    mCurrentSeries            = &series;
-    const bool seriesChanged  = (mCurrentSeriesInstanceUid != series.seriesInstanceUid);
-    const bool volumeChanged  = seriesChanged || (mCurrentVolumeData != &volumeData);
-    const bool sliceChanged   = (mCurrentSliceIndex != sliceIndex);
-    mCurrentSeriesInstanceUid = series.seriesInstanceUid;
-    mCurrentVolumeData        = &volumeData;
-    mCurrentSliceIndex        = sliceIndex;
+    mCurrentSeries                = &series;
+    const bool seriesChanged      = (mCurrentSeriesInstanceUid != series.seriesInstanceUid);
+    const bool volumeChanged      = seriesChanged || (mCurrentVolumeData != &volumeData);
+    const bool orientationChanged = (mCurrentOrientation != orientation);
+    const bool sliceChanged       = orientationChanged || (mCurrentSliceIndex != sliceIndex);
+    mCurrentSeriesInstanceUid     = series.seriesInstanceUid;
+    mCurrentVolumeData            = &volumeData;
+    mCurrentOrientation           = orientation;
+    mCurrentSliceIndex            = sliceIndex;
 
     if (volumeChanged || !mWindowLevelInitialized) {
         resetWindowLevelToDefault();
-        emitDisplayParametersChanged();
+        emitDisplayParametersChanged(); // 更新缩略图
     }
 
-    if (volumeChanged) {
+    if (volumeChanged || orientationChanged) {
         mPanOffset              = QPointF(0.0, 0.0);
         mZoomFactor             = 1.0;
         mCameraStateInitialized = false;
@@ -155,21 +197,33 @@ void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData
 
 void SliceViewWidget::renderCurrentSlice()
 {
-    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSliceIndex < 0
-        || mCurrentSliceIndex >= mCurrentVolumeData->depth) {
+    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
         clearDisplay();
         return;
     }
 
     const VolumeData &volumeData = *mCurrentVolumeData;
 
-    const int width  = volumeData.width;
-    const int height = volumeData.height;
+    // 确定 slice 方位的四件套：
+    int    width    = 0;
+    int    height   = 0;
+    double spacingX = 1.0;
+    double spacingY = 1.0;
+    setupSliceGeometry(volumeData, mCurrentOrientation, &width, &height, &spacingX, &spacingY);
+    if (width <= 0 || height <= 0) {
+        clearDisplay();
+        return;
+    }
 
-    const bool geometryChanged = ensureImageDataAllocated(width, height, volumeData.spacingX, volumeData.spacingY);
+    const bool geometryChanged = ensureImageDataAllocated(width, height, spacingX, spacingY);
     if (geometryChanged) {
         mCameraStateInitialized = false;
     }
+
+    mCurrentImageWidth    = width;
+    mCurrentImageHeight   = height;
+    mCurrentImageSpacingX = spacingX;
+    mCurrentImageSpacingY = spacingY;
 
     SliceImageBuildOptions buildOptions;
     buildOptions.windowCenter   = mCurrentWindowCenter;
@@ -178,7 +232,7 @@ void SliceViewWidget::renderCurrentSlice()
     buildOptions.flipHorizontal = mFlipHorizontalEnabled;
     buildOptions.flipVertical   = mFlipVerticalEnabled;
 
-    const QImage image = buildSliceImage(volumeData, mCurrentSliceIndex, buildOptions);
+    const QImage image = buildSliceImage(volumeData, mCurrentOrientation, mCurrentSliceIndex, buildOptions);
     if (image.isNull()) {
         clearDisplay();
         return;
@@ -187,7 +241,7 @@ void SliceViewWidget::renderCurrentSlice()
     // 填充图片像素
     unsigned char *buffer = static_cast<unsigned char *>(mImageData->GetScalarPointer(0, 0, 0));
     for (int y = 0; y < height; ++y) {
-        const uchar *srcRow   = image.constScanLine(y);
+        const uchar *srcRow = image.constScanLine(y);
         /**
          *  @note DICOM坐标系原点在左上角
          *        VTK坐标系原点在左下角
@@ -220,11 +274,13 @@ void SliceViewWidget::renderCurrentSlice()
 
 void SliceViewWidget::clearDisplay()
 {
-    mCurrentSeries     = nullptr;
+    mCurrentSeries = nullptr;
     mCurrentSeriesInstanceUid.clear();
-    mCurrentVolumeData = nullptr;
-    mCurrentSliceIndex = -1;
-    mMouseDragActive   = false;
+    mCurrentVolumeData  = nullptr;
+    mCurrentSliceIndex  = -1;
+    mCurrentImageWidth  = 0;
+    mCurrentImageHeight = 0;
+    mMouseDragActive    = false;
     clearMeasurement();
     if (mImageOverlayWidget != nullptr) {
         mImageOverlayWidget->clearOverlay();
@@ -261,8 +317,7 @@ void SliceViewWidget::paintEvent(QPaintEvent *event)
     /** @note 最终绘制时要用像素坐标 */
     const QPointF startPoint = imagePointToWidgetPoint(mMeasurementLine.p1());
     const QPointF endPoint   = imagePointToWidgetPoint(mMeasurementLine.p2());
-    if (!std::isfinite(startPoint.x())  || !std::isfinite(startPoint.y())
-        || !std::isfinite(endPoint.x()) || !std::isfinite(endPoint.y())) {
+    if (!std::isfinite(startPoint.x()) || !std::isfinite(startPoint.y()) || !std::isfinite(endPoint.x()) || !std::isfinite(endPoint.y())) {
         return;
     }
 
@@ -283,19 +338,19 @@ void SliceViewWidget::paintEvent(QPaintEvent *event)
 
     if (lineLength > 1e-3) {
         // 画两端刻度线
-        const QPointF direction = (endPoint - startPoint) / lineLength;
-        const QPointF normal(-direction.y(), direction.x());
-        constexpr double kEndTickHalfLength   = 7.0;
+        const QPointF    direction = (endPoint - startPoint) / lineLength;
+        const QPointF    normal(-direction.y(), direction.x());
+        constexpr double kEndTickHalfLength = 7.0;
         painter.drawLine(startPoint - normal * kEndTickHalfLength, startPoint + normal * kEndTickHalfLength);
-        painter.drawLine(endPoint   - normal * kEndTickHalfLength, endPoint   + normal * kEndTickHalfLength);
+        painter.drawLine(endPoint - normal * kEndTickHalfLength, endPoint + normal * kEndTickHalfLength);
 
         // 画中间刻度
         constexpr double kInnerTickHalfLength = 4.0;
         if (distanceMm >= kMeasurementTickSpacingMm) {
             const int tickCount = static_cast<int>(std::floor(distanceMm / kMeasurementTickSpacingMm));
             for (int tickIndex = 1; tickIndex < tickCount; ++tickIndex) {
-                const double distanceRatio = (tickIndex * kMeasurementTickSpacingMm) / distanceMm;
-                const QPointF tickCenter   = startPoint + (endPoint - startPoint) * distanceRatio;
+                const double  distanceRatio = (tickIndex * kMeasurementTickSpacingMm) / distanceMm;
+                const QPointF tickCenter    = startPoint + (endPoint - startPoint) * distanceRatio;
                 painter.drawLine(tickCenter - normal * kInnerTickHalfLength, tickCenter);
             }
         }
@@ -309,6 +364,8 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
     if (event == nullptr) {
         return;
     }
+
+    emit activated();
 
     if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::WindowLevel) {
         mMouseDragActive       = true;
@@ -408,9 +465,9 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
     }
 
     if (mMouseDragActive && mToolMode == StackToolMode::Zoom) {
-        const QPoint delta = event->pos() - mMouseDragStartPos;
-        const double zoomMultiplier = std::pow(1.01, -delta.y());   /** @note 注意Qt中向下为y正方向 */
-        mZoomFactor = std::clamp(mDragStartZoomFactor * zoomMultiplier, kMinimumZoomFactor, kMaximumZoomFactor);
+        const QPoint delta          = event->pos() - mMouseDragStartPos;
+        const double zoomMultiplier = std::pow(1.01, -delta.y()); /** @note 注意Qt中向下为y正方向 */
+        mZoomFactor                 = std::clamp(mDragStartZoomFactor * zoomMultiplier, kMinimumZoomFactor, kMaximumZoomFactor);
         applyViewStateToCamera();
         updateOverlayInfo();
         if (mRenderWindow != nullptr) {
@@ -480,8 +537,8 @@ void SliceViewWidget::setToolMode(StackToolMode mode)
     if (mToolMode == StackToolMode::Measure && mode != StackToolMode::Measure) {
         clearMeasurement();
     }
-    mToolMode = mode;
-    mMouseDragActive = false;
+    mToolMode            = mode;
+    mMouseDragActive     = false;
     mMeasurementDragging = false;
 }
 
@@ -567,7 +624,7 @@ void SliceViewWidget::installNoOpInteractorStyle()
 
 bool SliceViewWidget::ensureImageDataAllocated(int width, int height, double spacingX, double spacingY)
 {
-    int dims[3] = {0, 0, 0};
+    int    dims[3]       = {0, 0, 0};
     double oldSpacing[3] = {1.0, 1.0, 1.0};
 
     if (mImageData) {
@@ -577,10 +634,10 @@ bool SliceViewWidget::ensureImageDataAllocated(int width, int height, double spa
 
     bool needReallocate = false;
 
-    if (!mImageData       ||
-        dims[0] != width  ||
+    if (!mImageData ||
+        dims[0] != width ||
         dims[1] != height ||
-        dims[2] != 1      ||
+        dims[2] != 1 ||
         mImageData->GetScalarType() != VTK_UNSIGNED_CHAR) {
         needReallocate = true;
     }
@@ -620,8 +677,8 @@ void SliceViewWidget::applyViewStateToCamera()
         mBaseCameraPosition[1] + mPanOffset.y(),
         mBaseCameraPosition[2]);
     camera->SetParallelScale(mBaseParallelScale / std::max(kMinimumZoomFactor, mZoomFactor));
-    camera->ParallelProjectionOn();         // 防止ResetCamera又改回透视投影
-    mRenderer->ResetCameraClippingRange();  // 自动调整裁剪范围，使得所有物体都能显示在视图中
+    camera->ParallelProjectionOn();        // 防止ResetCamera又改回透视投影
+    mRenderer->ResetCameraClippingRange(); // 自动调整裁剪范围，使得所有物体都能显示在视图中
 }
 
 void SliceViewWidget::clearMeasurement()
@@ -659,15 +716,16 @@ void SliceViewWidget::updateOverlayInfo()
         return;
     }
 
-    if (mCurrentSeries == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid()
-        || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= mCurrentVolumeData->depth
-        || mCurrentSliceIndex >= mCurrentSeries->slices.size()) {
+    if (mCurrentSeries == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSeries->slices.isEmpty() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
         mImageOverlayWidget->clearOverlay();
         return;
     }
 
-    const DicomSliceInfo &sliceInfo = mCurrentSeries->slices.at(mCurrentSliceIndex);
-    OverlayInfo overlayInfo;
+    const int             axialSliceIndex = (mCurrentOrientation == SliceOrientation::Axial && mCurrentSliceIndex < mCurrentSeries->slices.size())
+                                                ? mCurrentSliceIndex
+                                                : std::clamp(mCurrentVolumeData->depth / 2, 0, static_cast<int>(mCurrentSeries->slices.size()) - 1);
+    const DicomSliceInfo &sliceInfo       = mCurrentSeries->slices.at(axialSliceIndex);
+    OverlayInfo           overlayInfo;
 
     if (!sliceInfo.patientName.isEmpty()) {
         overlayInfo.topLeftLines.push_back(sliceInfo.patientName);
@@ -678,16 +736,16 @@ void SliceViewWidget::updateOverlayInfo()
     if (!sliceInfo.patientBirthDate.isEmpty()) {
         overlayInfo.topLeftLines.push_back(sliceInfo.patientBirthDate);
     } // 匿名化后可能不显示
-    const QString sexAgeText = buildSexAgeText(sliceInfo);
+    const QString sexAgeText = util::buildSexAgeText(sliceInfo);
     if (!sexAgeText.isEmpty()) {
         overlayInfo.topLeftLines.push_back(sexAgeText);
     }
 
     if (!sliceInfo.studyDate.isEmpty()) {
-        overlayInfo.topRightLines.push_back(formatDicomDate(sliceInfo.studyDate));
+        overlayInfo.topRightLines.push_back(util::formatDicomDate(sliceInfo.studyDate));
     }
     if (!sliceInfo.studyTime.isEmpty()) {
-        overlayInfo.topRightLines.push_back(formatDicomTime(sliceInfo.studyTime));
+        overlayInfo.topRightLines.push_back(util::formatDicomTime(sliceInfo.studyTime));
     }
     if (!mCurrentVolumeData->modality.isEmpty() && mCurrentVolumeData->width && mCurrentVolumeData->height) {
         overlayInfo.topRightLines.push_back(QStringLiteral("%1 [%2x%3]")
@@ -715,12 +773,18 @@ void SliceViewWidget::updateOverlayInfo()
     if (!seriesText.isEmpty()) {
         overlayInfo.bottomLeftLines.push_back(seriesText);
     }
-    if (sliceInfo.hasInstanceNumber) {
+    const int orientationSliceCount = sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation);
+    if (mCurrentOrientation == SliceOrientation::Axial && sliceInfo.hasInstanceNumber) {
         overlayInfo.bottomLeftLines.push_back(QStringLiteral("Image %1 / %2").arg(sliceInfo.instanceNumber).arg(mCurrentVolumeData->depth));
     } else {
-        overlayInfo.bottomLeftLines.push_back(QStringLiteral("Slice %1 / %2").arg(mCurrentSliceIndex + 1).arg(mCurrentVolumeData->depth));
+        overlayInfo.bottomLeftLines.push_back(QStringLiteral("%1 %2 / %3")
+                                                  .arg(orientationText(mCurrentOrientation))
+                                                  .arg(mCurrentSliceIndex + 1)
+                                                  .arg(orientationSliceCount));
     }
-    const QString slicePositionText = formatSlicePositionText(sliceInfo);
+    const QString slicePositionText = (mCurrentOrientation == SliceOrientation::Axial)
+                                          ? util::formatSlicePositionText(sliceInfo)
+                                          : QString();
     if (!slicePositionText.isEmpty()) {
         overlayInfo.bottomLeftLines.push_back(slicePositionText);
     }
@@ -754,16 +818,16 @@ bool SliceViewWidget::widgetPointToImagePoint(const QPoint &widgetPoint, QPointF
         return false;
     }
 
-    vtkCamera *camera      = mRenderer->GetActiveCamera();
+    vtkCamera  *camera     = mRenderer->GetActiveCamera();
     const QSize widgetSize = size();
     if (camera == nullptr || widgetSize.width() <= 0 || widgetSize.height() <= 0) {
         return false;
     }
 
-    const double spacingX = mCurrentVolumeData->spacingX;
-    const double spacingY = mCurrentVolumeData->spacingY;
-    const double maxX = std::max(0.0, static_cast<double>(mCurrentVolumeData->width - 1)  * spacingX);
-    const double maxY = std::max(0.0, static_cast<double>(mCurrentVolumeData->height - 1) * spacingY);
+    const double spacingX = mCurrentImageSpacingX;
+    const double spacingY = mCurrentImageSpacingY;
+    const double maxX     = std::max(0.0, static_cast<double>(mCurrentImageWidth - 1) * spacingX);
+    const double maxY     = std::max(0.0, static_cast<double>(mCurrentImageHeight - 1) * spacingY);
 
     const double viewHeightWorld = 2.0 * camera->GetParallelScale();
     const double viewWidthWorld  = viewHeightWorld * static_cast<double>(widgetSize.width()) / static_cast<double>(widgetSize.height());
@@ -775,7 +839,7 @@ bool SliceViewWidget::widgetPointToImagePoint(const QPoint &widgetPoint, QPointF
      *  @note focalPoint[0] - 0.5 * viewWidthWorld   -> 世界范围的左边界
      *        focalPoint[1] + 0.5 * viewHeightWorld  -> 世界范围的上边界
      */
-    const double worldX = focalPoint[0] - 0.5 * viewWidthWorld  + static_cast<double>(widgetPoint.x()) * viewWidthWorld / static_cast<double>(widgetSize.width());
+    const double worldX = focalPoint[0] - 0.5 * viewWidthWorld + static_cast<double>(widgetPoint.x()) * viewWidthWorld / static_cast<double>(widgetSize.width());
     const double worldY = focalPoint[1] + 0.5 * viewHeightWorld - static_cast<double>(widgetPoint.y()) * viewHeightWorld / static_cast<double>(widgetSize.height());
     if (worldX < 0.0 || worldX > maxX || worldY < 0.0 || worldY > maxY) {
         return false;
@@ -791,7 +855,7 @@ QPointF SliceViewWidget::imagePointToWidgetPoint(const QPointF &imagePoint) cons
         return QPointF();
     }
 
-    vtkCamera *camera      = mRenderer->GetActiveCamera();
+    vtkCamera  *camera     = mRenderer->GetActiveCamera();
     const QSize widgetSize = size();
     if (camera == nullptr || widgetSize.width() <= 0 || widgetSize.height() <= 0) {
         return QPointF();

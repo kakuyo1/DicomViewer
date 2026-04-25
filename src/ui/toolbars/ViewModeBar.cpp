@@ -42,13 +42,13 @@ void ViewModeBar::setupUi()
     mStackButton->setChecked(true);
 
     connect(mStackButton, &QToolButton::clicked, this, [this]() {
-        emit viewModeChanged(QStringLiteral("Stack View"));
+        emit viewModeChanged(ViewMode::Stack);
     });
     connect(mMprButton, &QToolButton::clicked, this, [this]() {
-        emit viewModeChanged(QStringLiteral("MPR View"));
+        emit viewModeChanged(ViewMode::MPR);
     });
     connect(mVrButton, &QToolButton::clicked, this, [this]() {
-        emit viewModeChanged(QStringLiteral("VR View"));
+        emit viewModeChanged(ViewMode::VR);
     });
 
     layout->addWidget(mStackButton, 0, Qt::AlignHCenter);

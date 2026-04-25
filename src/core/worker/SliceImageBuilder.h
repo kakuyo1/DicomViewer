@@ -4,12 +4,15 @@
 #include <QSize>
 #include <QVector>
 
+#include "core/model/volume/SliceOrientation.h"
 #include "core/model/volume/VolumeData.h"
 
 struct SliceImageBuildInput
 {
     int width                      = 0;
     int height                     = 0;
+    double spacingX                = 1.0;
+    double spacingY                = 1.0;
     QVector<qint16> pixels;
     bool hasPixelPaddingValue      = false;
     qint16 pixelPaddingValue       = 0;
@@ -45,9 +48,18 @@ unsigned char mapWindowLevel(qint16 value,
                              qint16 sliceMax);
 
 SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData,
-                                          int sliceIndex);
+                                           int sliceIndex);
+
+SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData,
+                                           SliceOrientation orientation,
+                                           int sliceIndex);
 
 QImage buildSliceImage(const VolumeData &volumeData,
+                       int sliceIndex,
+                       const SliceImageBuildOptions &options);
+
+QImage buildSliceImage(const VolumeData &volumeData,
+                       SliceOrientation orientation,
                        int sliceIndex,
                        const SliceImageBuildOptions &options);
 

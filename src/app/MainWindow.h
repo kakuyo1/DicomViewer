@@ -4,6 +4,7 @@
 #include <QString>
 
 #include "services/model/ImportResult.h"
+#include "ui/model/ViewMode.h"
 
 class ImportController;
 class ViewerSession;
@@ -28,6 +29,7 @@ private:
     void handleImportCancelled();
     void handleImportFailed(const QString &message);
     void handleImportSucceeded(const ImportResult &result);
+    void handleViewModeChanged(ViewMode mode);
     void setImportBusy(bool busy);
     void printImportSucceededMsg(const ImportResult &result);
 

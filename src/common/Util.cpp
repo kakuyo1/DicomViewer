@@ -1,4 +1,5 @@
 #include "common/Util.h"
+#include "core/model/dicom/DicomSliceInfo.h"
 
 #include <QApplication>
 #include <QCoreApplication>
@@ -23,7 +24,7 @@ QString resolveProjectRelativePath(const QString &relativePath)
         return inputInfo.absoluteFilePath();
     }
 
-    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString     appDir     = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
         QFileInfo(relativePath).absoluteFilePath(),
         QDir::current().absoluteFilePath(relativePath),
@@ -102,6 +103,46 @@ bool applyGlobalStyleSheet(QApplication &app, const QString &styleSheetPath)
 
     spdlog::info("Applied global style sheet: {}", resolvedPath.toStdString());
     return true;
+}
+
+QString formatDicomDate(const QString &rawDate)
+{
+    if (rawDate.size() != 8) {
+        return rawDate;
+    }
+
+    return QStringLiteral("%1-%2-%3").arg(rawDate.mid(0, 4), rawDate.mid(4, 2), rawDate.mid(6, 2));
+}
+
+QString formatDicomTime(const QString &rawTime)
+{
+    if (rawTime.size() != 6) {
+        return rawTime;
+    }
+
+    return QStringLiteral("%1:%2:%3").arg(rawTime.mid(0, 2), rawTime.mid(2, 2), rawTime.mid(4, 2));
+}
+
+QString buildSexAgeText(const DicomSliceInfo &sliceInfo)
+{
+    QStringList parts;
+    if (!sliceInfo.patientSex.isEmpty()) {
+        parts.push_back(sliceInfo.patientSex);
+    }
+    if (!sliceInfo.patientAge.isEmpty()) {
+        parts.push_back(sliceInfo.patientAge);
+    }
+    return parts.join(QStringLiteral(" / "));
+}
+
+QString formatSlicePositionText(const DicomSliceInfo &sliceInfo)
+{
+    if (sliceInfo.hasImagePositionPatient) {
+        return QStringLiteral("Location: %1 mm").arg(sliceInfo.imagePositionPatient.z, 0, 'f', 2);
+    } else if (sliceInfo.hasSliceLocation) {
+        return QStringLiteral("Location: %1 mm").arg(sliceInfo.sliceLocation, 0, 'f', 2);
+    }
+    return {};
 }
 
 } // namespace util

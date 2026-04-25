@@ -5,6 +5,7 @@
 #include <spdlog/common.h>
 
 class QApplication;
+class DicomSliceInfo;
 
 namespace util
 {
@@ -24,4 +25,11 @@ bool applyGlobalStyleSheet(QApplication &app);
 
 bool applyGlobalStyleSheet(QApplication &app, const QString &styleSheetPath);
 
+QString formatDicomDate(const QString &rawDate);
+
+QString formatDicomTime(const QString &rawTime);
+
+QString buildSexAgeText(const DicomSliceInfo &sliceInfo);
+
+QString formatSlicePositionText(const DicomSliceInfo &sliceInfo);
 } // namespace util

@@ -33,9 +33,9 @@ void ImageOverlayWidget::setOverlayInfo(const OverlayInfo &overlayInfo)
 {
     mOverlayInfo = overlayInfo;
 
-    updateLabel(mTopLeftLabel,     mOverlayInfo.topLeftLines);
-    updateLabel(mTopRightLabel,    mOverlayInfo.topRightLines);
-    updateLabel(mBottomLeftLabel,  mOverlayInfo.bottomLeftLines);
+    updateLabel(mTopLeftLabel, mOverlayInfo.topLeftLines);
+    updateLabel(mTopRightLabel, mOverlayInfo.topRightLines);
+    updateLabel(mBottomLeftLabel, mOverlayInfo.bottomLeftLines);
     updateLabel(mBottomRightLabel, mOverlayInfo.bottomRightLines);
     updateLabelGeometries();
 }
@@ -73,7 +73,7 @@ void ImageOverlayWidget::updateLabel(QLabel *label, const QStringList &lines)
         return;
     }
 
-    const QString text = lines.join('\n').trimmed();    // 以换行符连接所有的string
+    const QString text = lines.join('\n').trimmed(); // 以换行符连接所有的string
     label->setMaximumWidth(kOverlayMaxWidth);
     label->setText(text);
     label->setVisible(!text.isEmpty());

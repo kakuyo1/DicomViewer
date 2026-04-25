@@ -182,6 +182,54 @@ QToolTip {
     border: 1px solid #6f93c4;
 }
 
+#mprPage,
+#vrPage {
+    background-color: #11151b;
+    border: 1px solid #3b4553;
+}
+
+#placeholderPageTitle {
+    color: #f0f5fb;
+    background-color: transparent;
+    border: none;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+#placeholderPageHint {
+    color: #aeb8c6;
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+}
+
+#mprSagittalPane,
+#mprCoronalPane,
+#mprAxialPane {
+    background-color: #0b0f14;
+    border-radius: 4px;
+}
+
+#mprSagittalPane {
+    border: 1px solid #c98787;
+}
+
+#mprCoronalPane {
+    border: 1px solid #8fbe8c;
+}
+
+#mprAxialPane {
+    border: 1px solid #7fa9d8;
+}
+
+#mprPaneTitle {
+    color: #dfe7f1;
+    background-color: transparent;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+
 #leftContainer {
     border: none;
 }

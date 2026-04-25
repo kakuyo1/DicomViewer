@@ -95,28 +95,27 @@ void MainWindow::setupUi()
 
 void MainWindow::setupConnects()
 {
-    connect(mTitleBar, &TitleBarWidget::openFolderRequested,       this, &MainWindow::handleOpenFolderRequested);
+    connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, &MainWindow::handleOpenFolderRequested);
 
-    connect(mStackToolBar, &StackToolBar::toolModeChanged,          mWorkSpaceWidget, &WorkSpaceWidget::setStackToolMode);
-    connect(mStackToolBar, &StackToolBar::invertTriggered,          mWorkSpaceWidget, &WorkSpaceWidget::triggerStackInvert);
-    connect(mStackToolBar, &StackToolBar::flipHorizontalTriggered,  mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipHorizontal);
-    connect(mStackToolBar, &StackToolBar::flipVerticalTriggered,    mWorkSpaceWidget, &WorkSpaceWidget::triggerStackFlipVertical);
-    connect(mStackToolBar, &StackToolBar::resetTriggered,           mWorkSpaceWidget, &WorkSpaceWidget::resetStackView);
+    connect(mStackToolBar, &StackToolBar::toolModeChanged, mWorkSpaceWidget, &WorkSpaceWidget::setToolMode);
+    connect(mStackToolBar, &StackToolBar::invertTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerInvert);
+    connect(mStackToolBar, &StackToolBar::flipHorizontalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipHorizontal);
+    connect(mStackToolBar, &StackToolBar::flipVerticalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipVertical);
+    connect(mStackToolBar, &StackToolBar::resetTriggered, mWorkSpaceWidget, &WorkSpaceWidget::resetCurrentView);
 
     // 用户点击缩略图切片 -> 主窗口渲染对应切片
-    connect(mThumbnailPanel,  &ThumbnailPanel::sliceActivated,                 mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
+    connect(mThumbnailPanel, &ThumbnailPanel::sliceActivated, mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
     // 主窗口滚轮切换切片 -> 缩略图滚动至对应切片
-    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged,      mThumbnailPanel,  &ThumbnailPanel::setCurrentSliceIndex);
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentStackSliceChanged, mThumbnailPanel, &ThumbnailPanel::setCurrentSliceIndex);
     // 主窗口图像状态改变 -> 缩略图同步图像状态(invert/flip迅速跟进， WW/WL 延迟跟进)
-    connect(mWorkSpaceWidget, &WorkSpaceWidget::stackDisplayParametersChanged, mThumbnailPanel,  &ThumbnailPanel::setDisplayParameters);
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::stackDisplayParametersChanged, mThumbnailPanel, &ThumbnailPanel::setDisplayParameters);
 
-    connect(mViewModeBar, &ViewModeBar::viewModeChanged, this, [](const QString &viewModeName) {
-        spdlog::info("Demo view mode switched to: {}", viewModeName.toStdString());
-    });
+    connect(mViewModeBar, &ViewModeBar::viewModeChanged, mWorkSpaceWidget, &WorkSpaceWidget::setViewMode);
+    connect(mWorkSpaceWidget, &WorkSpaceWidget::currentViewModeChanged, this, &MainWindow::handleViewModeChanged);
 
-    connect(mImportController, &ImportController::importStarted,   this, &MainWindow::handleImportStarted);
+    connect(mImportController, &ImportController::importStarted, this, &MainWindow::handleImportStarted);
     connect(mImportController, &ImportController::importCancelled, this, &MainWindow::handleImportCancelled);
-    connect(mImportController, &ImportController::importFailed,    this, &MainWindow::handleImportFailed);
+    connect(mImportController, &ImportController::importFailed, this, &MainWindow::handleImportFailed);
     connect(mImportController, &ImportController::importSucceeded, this, &MainWindow::handleImportSucceeded);
 }
 
@@ -159,11 +158,32 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
     mViewerSession->setImportResult(result); /** @note 该函数不是每次导入都 new 一个新对象，而是原地覆盖这个对象，地址不变，所以不能用这个地址去判断 series 是否更新！ */
 
     if (mWorkSpaceWidget != nullptr) {
-        mWorkSpaceWidget->setStackToolMode(StackToolMode::WindowLevel);
-        mWorkSpaceWidget->resetStackView();
+        mWorkSpaceWidget->setToolMode(StackToolMode::WindowLevel);
+        mWorkSpaceWidget->resetCurrentView();
     }
 
     printImportSucceededMsg(result);
+}
+
+void MainWindow::handleViewModeChanged(ViewMode mode)
+{
+    // 只有 StackView 模式下才显示缩略图
+    const bool stackMode = (mode == ViewMode::Stack);
+    if (mThumbnailPanel != nullptr) {
+        mThumbnailPanel->setVisible(stackMode);
+    }
+
+    if (mode == ViewMode::Stack) {
+        spdlog::info("View mode switched to: Stack View");
+        return;
+    }
+    if (mode == ViewMode::MPR) {
+        spdlog::info("View mode switched to: MPR View");
+        return;
+    }
+    if (mode == ViewMode::VR) {
+        spdlog::info("View mode switched to: VR View");
+    }
 }
 
 void MainWindow::setImportBusy(bool busy)
