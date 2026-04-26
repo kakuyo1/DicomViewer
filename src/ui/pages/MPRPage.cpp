@@ -37,9 +37,9 @@ void MPRPage::setupUi()
     rootLayout->addWidget(sagittalPane, 0, 0);
     rootLayout->addWidget(coronalPane, 1, 0);
     rootLayout->addWidget(axialPane, 0, 1, 2, 1);
-    rootLayout->setColumnStretch(0, 1);
-    rootLayout->setColumnStretch(1, 2);
-    rootLayout->setRowStretch(0, 1);
+    rootLayout->setColumnStretch(0, 10); // 宽度(小:大) 1 : 1.5
+    rootLayout->setColumnStretch(1, 15);
+    rootLayout->setRowStretch(0, 1); // 高度(小:大) 1 : 2
     rootLayout->setRowStretch(1, 1);
 
     connect(mSagittalView, &SliceViewWidget::activated, this, [this]() {
