@@ -1,6 +1,7 @@
 #include "MPRPage.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QGridLayout>
 #include <QLabel>
@@ -42,6 +43,7 @@ void MPRPage::setupUi()
     rootLayout->setRowStretch(0, 1); // 高度(小:大) 1 : 2
     rootLayout->setRowStretch(1, 1);
 
+    // 激活单个窗口
     connect(mSagittalView, &SliceViewWidget::activated, this, [this]() {
         setActiveView(MPRViewType::Sagittal);
     });
@@ -52,6 +54,7 @@ void MPRPage::setupUi()
         setActiveView(MPRViewType::Axial);
     });
 
+    // 滚轮切片
     connect(mSagittalView, &SliceViewWidget::sliceScrollRequested, this, [this](int steps) {
         handleSliceScrollRequested(MPRViewType::Sagittal, steps);
     });
@@ -60,6 +63,29 @@ void MPRPage::setupUi()
     });
     connect(mAxialView, &SliceViewWidget::sliceScrollRequested, this, [this](int steps) {
         handleSliceScrollRequested(MPRViewType::Axial, steps);
+    });
+
+    // Crosshair 功能下鼠标按下
+    connect(mSagittalView, &SliceViewWidget::imagePointPressed, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
+    });
+
+    connect(mCoronalView, &SliceViewWidget::imagePointPressed, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Coronal, imagePoint);
+    });
+    connect(mAxialView, &SliceViewWidget::imagePointPressed, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Axial, imagePoint);
+    });
+
+    // Crosshair 功能下鼠标拖动
+    connect(mSagittalView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
+    });
+    connect(mCoronalView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Coronal, imagePoint);
+    });
+    connect(mAxialView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
+        handleCrosshairPointChanged(MPRViewType::Axial, imagePoint);
     });
 
     setActiveView(MPRViewType::Axial);
@@ -213,12 +239,15 @@ void MPRPage::clearDisplay()
 
     if (mSagittalView != nullptr) {
         mSagittalView->clearDisplay();
+        mSagittalView->clearCrosshair();
     }
     if (mCoronalView != nullptr) {
         mCoronalView->clearDisplay();
+        mCoronalView->clearCrosshair();
     }
     if (mAxialView != nullptr) {
         mAxialView->clearDisplay();
+        mAxialView->clearCrosshair();
     }
 }
 
@@ -254,9 +283,12 @@ void MPRPage::updateAllViews()
 {
     mRefreshPending = false;
 
+    // 先渲染图
     updateView(MPRViewType::Sagittal);
     updateView(MPRViewType::Coronal);
     updateView(MPRViewType::Axial);
+    // 再绘制十字线
+    updateCrosshairForAllViews();
     setToolMode(mToolMode);
 }
 
@@ -296,7 +328,75 @@ void MPRPage::handleSliceScrollRequested(MPRViewType viewType, int steps)
     }
 
     state->sliceIndex = std::clamp(state->sliceIndex + steps, 0, sliceCount - 1);
-    updateView(viewType);
+    updateView(viewType);         // 先渲染图
+    updateCrosshairForAllViews(); // 再三视图同步
+}
+
+void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint)
+{
+    const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        return;
+    }
+
+    if (viewType == MPRViewType::Axial) {
+        mSagittalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingX, volumeData->width);
+        mCoronalState.sliceIndex  = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingY, volumeData->height);
+    } else if (viewType == MPRViewType::Coronal) {
+        mSagittalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingX, volumeData->width);
+        mAxialState.sliceIndex    = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingZ, volumeData->depth);
+    } else if (viewType == MPRViewType::Sagittal) {
+        mCoronalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingY, volumeData->height);
+        mAxialState.sliceIndex   = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingZ, volumeData->depth);
+    }
+
+    updateAllViews();
+}
+
+void MPRPage::updateCrosshairForAllViews()
+{
+    const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    if (volumeData == nullptr || !volumeData->isValid()) {
+        if (mSagittalView != nullptr) {
+            mSagittalView->clearCrosshair();
+        }
+        if (mCoronalView != nullptr) {
+            mCoronalView->clearCrosshair();
+        }
+        if (mAxialView != nullptr) {
+            mAxialView->clearCrosshair();
+        }
+        return;
+    }
+
+    // Crosshair 的核心不是画两条线，而是维护一个三维体素坐标：
+    // (x, y, z) = (Sagittal index, Coronal index, Axial index)
+    // 点击任意视图时，根据该视图的方向把 2D image point 反推到 (x, y, z)
+    const int x = std::clamp(mSagittalState.sliceIndex, 0, volumeData->width - 1);
+    const int y = std::clamp(mCoronalState.sliceIndex, 0, volumeData->height - 1);
+    const int z = std::clamp(mAxialState.sliceIndex, 0, volumeData->depth - 1);
+
+    // 绘制时，再把 `(x, y, z)` 投影回三个视图各自的 image point。
+    if (mSagittalView != nullptr) {
+        mSagittalView->setCrosshairImagePoint(QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
+    }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setCrosshairImagePoint(QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setCrosshairImagePoint(QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
+    }
+}
+
+// 从 image 坐标转体素 index 时，使用 `std::lround`，再 clamp 到合法范围。
+int MPRPage::imageMmToVoxelIndex(double valueMm, double spacing, int count) const
+{
+    if (spacing <= 0.0 || count <= 0) {
+        return 0;
+    }
+
+    const int index = static_cast<int>(std::lround(valueMm / spacing));
+    return std::clamp(index, 0, count - 1);
 }
 
 void MPRPage::setActiveView(MPRViewType viewType)

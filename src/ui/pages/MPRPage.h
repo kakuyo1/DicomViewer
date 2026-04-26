@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QPointF>
 #include <QString>
 #include <QWidget>
 
@@ -53,6 +54,9 @@ private:
     void             updateAllViews();
     void             updateView(MPRViewType viewType);
     void             handleSliceScrollRequested(MPRViewType viewType, int steps);
+    void             handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
+    void             updateCrosshairForAllViews();
+    int              imageMmToVoxelIndex(double valueMm, double spacing, int count) const;
     void             setActiveView(MPRViewType viewType);
     SliceViewWidget *viewForType(MPRViewType viewType) const;
     MPRSliceState   *stateForType(MPRViewType viewType);

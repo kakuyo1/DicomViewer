@@ -42,10 +42,14 @@ public:
     void setInvertEnabled(bool enabled);
     void setFlipHorizontalEnabled(bool enabled);
     void setFlipVerticalEnabled(bool enabled);
+    void setCrosshairImagePoint(const QPointF &imagePoint);
+    void clearCrosshair();
     void resetViewState(bool renderImmediately = true);
 
 signals:
     void activated();
+    void imagePointPressed(const QPointF &imagePoint);
+    void imagePointDragged(const QPointF &imagePoint);
     void sliceScrollRequested(int steps);
     void displayParametersChanged(double windowCenter,
                                   double windowWidth,
@@ -117,6 +121,10 @@ private:
     bool mMeasurementDragging               = false;
     QLineF mMeasurementLine;                                    // 保存的是图像物理坐标（如果保存的是屏幕坐标，一旦屏幕尺寸变化等，线的位置就乱了）
     QLabel *mMeasurementLabel               = nullptr;          // 用label保存文字，因为不知道为什么直接在paintEvent中绘制，文字会乱码
+
+    bool mCrosshairVisible                  = false;
+    bool mCrosshairDragging                 = false;
+    QPointF mCrosshairImagePoint;
 
     ImageOverlayWidget *mImageOverlayWidget = nullptr;
 

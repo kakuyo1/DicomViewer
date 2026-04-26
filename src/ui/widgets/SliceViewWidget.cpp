@@ -143,10 +143,10 @@ void SliceViewWidget::renderCurrentSlice()
 
     // 确定 slice 方位的四件套：
     const util::SlicePlaneGeometry geometry = util::sliceGeometryForOrientation(volumeData, mCurrentOrientation);
-    const int width                         = geometry.width;
-    const int height                        = geometry.height;
-    const double spacingX                   = geometry.spacingX;
-    const double spacingY                   = geometry.spacingY;
+    const int                      width    = geometry.width;
+    const int                      height   = geometry.height;
+    const double                   spacingX = geometry.spacingX;
+    const double                   spacingY = geometry.spacingY;
     if (width <= 0 || height <= 0) {
         clearDisplay();
         return;
@@ -218,6 +218,8 @@ void SliceViewWidget::clearDisplay()
     mCurrentImageWidth  = 0;
     mCurrentImageHeight = 0;
     mMouseDragActive    = false;
+    mCrosshairVisible   = false;
+    mCrosshairDragging  = false;
     clearMeasurement();
     if (mImageOverlayWidget != nullptr) {
         mImageOverlayWidget->clearOverlay();
@@ -244,7 +246,39 @@ void SliceViewWidget::paintEvent(QPaintEvent *event)
 {
     QVTKOpenGLNativeWidget::paintEvent(event);
 
-    if (!mMeasurementVisible || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid()) {
+    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid()) {
+        if (mMeasurementLabel != nullptr) {
+            mMeasurementLabel->hide();
+        }
+        return;
+    }
+
+    // 如果测量线和十字线都不需要的话，直接 return
+    if (!mMeasurementVisible && !mCrosshairVisible) {
+        if (mMeasurementLabel != nullptr) {
+            mMeasurementLabel->hide();
+        }
+        return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+    if (mCrosshairVisible) {
+        const QPointF crosshairPoint = imagePointToWidgetPoint(mCrosshairImagePoint);
+        if (std::isfinite(crosshairPoint.x()) && std::isfinite(crosshairPoint.y())) {
+            QPen crosshairPen(QColor(127, 169, 216)); // 淡蓝色
+            crosshairPen.setWidth(1);
+            crosshairPen.setCosmetic(true);
+            painter.setPen(crosshairPen);
+            // 十字线
+            painter.drawLine(QPointF(crosshairPoint.x(), 0.0), QPointF(crosshairPoint.x(), height()));
+            painter.drawLine(QPointF(0.0, crosshairPoint.y()), QPointF(width(), crosshairPoint.y()));
+        }
+    }
+
+    if (!mMeasurementVisible) {
         if (mMeasurementLabel != nullptr) {
             mMeasurementLabel->hide();
         }
@@ -263,10 +297,6 @@ void SliceViewWidget::paintEvent(QPaintEvent *event)
     const double lineLength = screenLine.length();
 
     // 画主测量线
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setRenderHint(QPainter::TextAntialiasing, true);
-
     QPen linePen(QColor(255, 215, 0));
     linePen.setWidth(2);
     linePen.setCosmetic(true);
@@ -336,6 +366,16 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
             mMeasurementVisible  = true;
             mMeasurementDragging = true;
             update();
+        }
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mToolMode == SliceToolMode::Crosshair) {
+        QPointF imagePoint;
+        if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
+            mCrosshairDragging = true;
+            emit imagePointPressed(imagePoint);
         }
         event->accept();
         return;
@@ -424,6 +464,15 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
+    if (mCrosshairDragging && mToolMode == SliceToolMode::Crosshair) {
+        QPointF imagePoint;
+        if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
+            emit imagePointDragged(imagePoint);
+        }
+        event->accept();
+        return;
+    }
+
     event->accept();
 }
 
@@ -441,6 +490,12 @@ void SliceViewWidget::mouseReleaseEvent(QMouseEvent *event)
 
     if (event->button() == Qt::LeftButton && mMeasurementDragging) {
         mMeasurementDragging = false;
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && mCrosshairDragging) {
+        mCrosshairDragging = false;
         event->accept();
         return;
     }
@@ -502,12 +557,28 @@ void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
     renderCurrentSlice();
 }
 
+void SliceViewWidget::setCrosshairImagePoint(const QPointF &imagePoint)
+{
+    mCrosshairVisible    = true;
+    mCrosshairImagePoint = imagePoint;
+    update();
+}
+
+void SliceViewWidget::clearCrosshair()
+{
+    mCrosshairVisible    = false;
+    mCrosshairDragging   = false;
+    mCrosshairImagePoint = QPointF();
+    update();
+}
+
 void SliceViewWidget::resetViewState(bool renderImmediately)
 {
     mInvertEnabled          = false;
     mFlipHorizontalEnabled  = false;
     mFlipVerticalEnabled    = false;
     mMouseDragActive        = false;
+    mCrosshairDragging      = false;
     mPanOffset              = QPointF(0.0, 0.0);
     mZoomFactor             = 1.0;
     mCameraStateInitialized = false;
@@ -624,6 +695,7 @@ void SliceViewWidget::clearMeasurement()
 {
     mMeasurementVisible  = false;
     mMeasurementDragging = false;
+    mCrosshairDragging   = false;
     mMeasurementLine     = QLineF();
     if (mMeasurementLabel != nullptr) {
         mMeasurementLabel->hide();
