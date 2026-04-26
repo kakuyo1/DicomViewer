@@ -1,4 +1,4 @@
-#include "StackToolBar.h"
+#include "SliceToolBar.h"
 
 #include <QButtonGroup>
 #include <QFrame>
@@ -8,29 +8,29 @@
 
 #include "common/Util.h"
 
-StackToolBar::StackToolBar(QWidget *parent)
+SliceToolBar::SliceToolBar(QWidget *parent)
     : QWidget(parent)
 {
     setupUi();
 }
 
-StackToolBar::~StackToolBar()
+SliceToolBar::~SliceToolBar()
 {
 
 }
 
-void StackToolBar::setupUi()
+void SliceToolBar::setupUi()
 {
-    setObjectName(QStringLiteral("stackToolBar"));
+    setObjectName(QStringLiteral("sliceToolBar"));
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMinimumHeight(52);
 
-    /** @note [Pan] [Zoom] [WL] [Measure] | [Flip H] [Flip V] [Invert] | [Reset] */
+    /** @note [Pan] [Zoom] [WL] [Measure] [Crosshair] | [Flip H] [Flip V] [Invert] | [Reset] */
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 8);
     layout->setSpacing(8);
 
-    // 1.[Pan] [Zoom] [WL] [Measure]
+    // 1.[Pan] [Zoom] [WL] [Measure] [Crosshair]
     mModeGroup = new QButtonGroup(this);
     mModeGroup->setExclusive(true);
 
@@ -38,16 +38,19 @@ void StackToolBar::setupUi()
     mZoomButton        = createToolButton(QStringLiteral(" Zoom"),    QStringLiteral("resources/icons/Zoom.png"),    true);
     mWindowLevelButton = createToolButton(QStringLiteral(" WW/WL"),   QStringLiteral("resources/icons/WW-WL.png"),   true);
     mMeasureButton     = createToolButton(QStringLiteral(" Measure"), QStringLiteral("resources/icons/Measure.png"), true);
+    mCrosshairButton   = createToolButton(QStringLiteral(" Crosshair"), QStringLiteral("resources/icons/Crosshair.png"), true);
 
     mModeGroup->addButton(mPanButton);
     mModeGroup->addButton(mZoomButton);
     mModeGroup->addButton(mWindowLevelButton);
     mModeGroup->addButton(mMeasureButton);
+    mModeGroup->addButton(mCrosshairButton);
 
     layout->addWidget(mPanButton);
     layout->addWidget(mZoomButton);
     layout->addWidget(mWindowLevelButton);
     layout->addWidget(mMeasureButton);
+    layout->addWidget(mCrosshairButton);
     layout->addSpacing(4);
     layout->addWidget(createSeparator());
     layout->addSpacing(4);
@@ -68,16 +71,17 @@ void StackToolBar::setupUi()
     mResetButton = createToolButton(QStringLiteral(" Reset"), QStringLiteral("resources/icons/Reset.png"), false);
     layout->addWidget(mResetButton);
 
-    connect(mModeGroup,    &QButtonGroup::buttonClicked, this, &StackToolBar::handleModeButtonClicked);
-    connect(mFlipHButton,  &QToolButton::clicked,        this, &StackToolBar::flipHorizontalTriggered);
-    connect(mFlipVButton,  &QToolButton::clicked,        this, &StackToolBar::flipVerticalTriggered);
-    connect(mInvertButton, &QToolButton::clicked,        this, &StackToolBar::invertTriggered);
-    connect(mResetButton,  &QToolButton::clicked,        this, &StackToolBar::resetTriggered);
+    connect(mModeGroup,    &QButtonGroup::buttonClicked, this, &SliceToolBar::handleModeButtonClicked);
+    connect(mFlipHButton,  &QToolButton::clicked,        this, &SliceToolBar::flipHorizontalTriggered);
+    connect(mFlipVButton,  &QToolButton::clicked,        this, &SliceToolBar::flipVerticalTriggered);
+    connect(mInvertButton, &QToolButton::clicked,        this, &SliceToolBar::invertTriggered);
+    connect(mResetButton,  &QToolButton::clicked,        this, &SliceToolBar::resetTriggered);
 
     mPanButton->setChecked(true);
+    setCrosshairVisible(false);
 }
 
-QToolButton *StackToolBar::createToolButton(const QString &text, const QString &iconPath, bool checkable)
+QToolButton *SliceToolBar::createToolButton(const QString &text, const QString &iconPath, bool checkable)
 {
     auto *button = new QToolButton(this);
     button->setText(text);
@@ -95,10 +99,10 @@ QToolButton *StackToolBar::createToolButton(const QString &text, const QString &
     return button;
 }
 
-QFrame *StackToolBar::createSeparator()
+QFrame *SliceToolBar::createSeparator()
 {
     auto *separator = new QFrame(this);
-    separator->setObjectName(QStringLiteral("stackToolBarSeparator"));
+    separator->setObjectName(QStringLiteral("sliceToolBarSeparator"));
     separator->setFrameShape(QFrame::VLine);
     separator->setFrameShadow(QFrame::Plain);
     separator->setFixedWidth(2);
@@ -106,40 +110,60 @@ QFrame *StackToolBar::createSeparator()
     return separator;
 }
 
-void StackToolBar::setActiveToolMode(StackToolMode mode)
+void SliceToolBar::setActiveToolMode(SliceToolMode mode)
 {
-    if (mode == StackToolMode::Pan && mPanButton != nullptr) {
+    if (mode == SliceToolMode::Pan && mPanButton != nullptr) {
         mPanButton->setChecked(true);
         return;
     }
-    if (mode == StackToolMode::Zoom && mZoomButton != nullptr) {
+    if (mode == SliceToolMode::Zoom && mZoomButton != nullptr) {
         mZoomButton->setChecked(true);
         return;
     }
-    if (mode == StackToolMode::WindowLevel && mWindowLevelButton != nullptr) {
+    if (mode == SliceToolMode::WindowLevel && mWindowLevelButton != nullptr) {
         mWindowLevelButton->setChecked(true);
         return;
     }
-    if (mode == StackToolMode::Measure && mMeasureButton != nullptr) {
+    if (mode == SliceToolMode::Measure && mMeasureButton != nullptr) {
         mMeasureButton->setChecked(true);
+        return;
+    }
+    if (mode == SliceToolMode::Crosshair && mCrosshairButton != nullptr && mCrosshairButton->isVisible()) {
+        mCrosshairButton->setChecked(true);
     }
 }
 
-void StackToolBar::handleModeButtonClicked(QAbstractButton *button)
+void SliceToolBar::setCrosshairVisible(bool visible)
+{
+    if (mCrosshairButton == nullptr) {
+        return;
+    }
+
+    if (!visible && mCrosshairButton->isChecked()) {
+        setActiveToolMode(SliceToolMode::Pan);
+    }
+    mCrosshairButton->setVisible(visible);
+}
+
+void SliceToolBar::handleModeButtonClicked(QAbstractButton *button)
 {
     if (button == mPanButton) {
-        emit toolModeChanged(StackToolMode::Pan);
+        emit toolModeChanged(SliceToolMode::Pan);
         return;
     }
     if (button == mZoomButton) {
-        emit toolModeChanged(StackToolMode::Zoom);
+        emit toolModeChanged(SliceToolMode::Zoom);
         return;
     }
     if (button == mWindowLevelButton) {
-        emit toolModeChanged(StackToolMode::WindowLevel);
+        emit toolModeChanged(SliceToolMode::WindowLevel);
         return;
     }
     if (button == mMeasureButton) {
-        emit toolModeChanged(StackToolMode::Measure);
+        emit toolModeChanged(SliceToolMode::Measure);
+        return;
+    }
+    if (button == mCrosshairButton) {
+        emit toolModeChanged(SliceToolMode::Crosshair);
     }
 }

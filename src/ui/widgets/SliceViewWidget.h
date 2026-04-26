@@ -10,7 +10,7 @@
 #include <vtkSmartPointer.h>
 
 #include "core/model/volume/SliceOrientation.h"
-#include "ui/toolbars/StackToolMode.h"
+#include "ui/toolbars/SliceToolMode.h"
 
 class DicomSeries;
 class VolumeData;
@@ -38,7 +38,7 @@ public:
     void showSlice(const DicomSeries &series, const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex);
     void clearDisplay();
 
-    void setToolMode(StackToolMode mode);
+    void setToolMode(SliceToolMode mode);
     void setInvertEnabled(bool enabled);
     void setFlipHorizontalEnabled(bool enabled);
     void setFlipVerticalEnabled(bool enabled);
@@ -88,7 +88,7 @@ private:
     double mCurrentImageSpacingX            = 1.0;
     double mCurrentImageSpacingY            = 1.0;
 
-    StackToolMode mToolMode                 = StackToolMode::Pan;
+    SliceToolMode mToolMode                 = SliceToolMode::Pan;
 
     bool mInvertEnabled                     = false;
 

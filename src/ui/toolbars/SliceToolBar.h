@@ -2,25 +2,26 @@
 
 #include <QWidget>
 
-#include "ui/toolbars/StackToolMode.h"
+#include "ui/toolbars/SliceToolMode.h"
 
 class QAbstractButton;
 class QButtonGroup;
 class QFrame;
 class QToolButton;
 
-class StackToolBar : public QWidget
+class SliceToolBar : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit StackToolBar(QWidget *parent = nullptr);
-    ~StackToolBar();
+    explicit SliceToolBar(QWidget *parent = nullptr);
+    ~SliceToolBar();
 
-    void setActiveToolMode(StackToolMode mode);
+    void setActiveToolMode(SliceToolMode mode);
+    void setCrosshairVisible(bool visible);
 
 signals:
-    void toolModeChanged(StackToolMode mode);
+    void toolModeChanged(SliceToolMode mode);
     void invertTriggered();
     void flipHorizontalTriggered();
     void flipVerticalTriggered();
@@ -38,6 +39,7 @@ private:
     QToolButton  *mZoomButton        = nullptr;
     QToolButton  *mWindowLevelButton = nullptr;
     QToolButton  *mMeasureButton     = nullptr;
+    QToolButton  *mCrosshairButton   = nullptr;
     QToolButton  *mFlipHButton       = nullptr;
     QToolButton  *mFlipVButton       = nullptr;
     QToolButton  *mInvertButton      = nullptr;

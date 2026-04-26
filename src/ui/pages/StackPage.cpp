@@ -17,7 +17,6 @@ StackPage::StackPage(QWidget *parent)
 
 StackPage::~StackPage()
 {
-
 }
 
 void StackPage::setupUi()
@@ -33,7 +32,7 @@ void StackPage::setupUi()
     mSliceViewWidget->setMinimumSize(640, 480);
     rootLayout->addWidget(mSliceViewWidget);
 
-    connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested,     this, &StackPage::handleSliceScrollRequested);
+    connect(mSliceViewWidget, &SliceViewWidget::sliceScrollRequested, this, &StackPage::handleSliceScrollRequested);
     connect(mSliceViewWidget, &SliceViewWidget::displayParametersChanged, this, &StackPage::displayParametersChanged);
 }
 
@@ -76,12 +75,21 @@ void StackPage::setCurrentSliceIndex(int sliceIndex)
     updateDisplayedSlice();
 }
 
-void StackPage::setToolMode(StackToolMode mode)
+void StackPage::setToolMode(SliceToolMode mode)
 {
+    if (mode == SliceToolMode::Crosshair) { // Stack 页面没有 Crosshair
+        return;
+    }
+
     mToolMode = mode;
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->setToolMode(mode);
     }
+}
+
+SliceToolMode StackPage::toolMode() const
+{
+    return mToolMode;
 }
 
 void StackPage::toggleInvert()
@@ -119,7 +127,7 @@ void StackPage::resetView()
     }
 }
 
-void StackPage::refreshFromSession()    /// 导入成功初始化切片
+void StackPage::refreshFromSession() /// 导入成功初始化切片
 {
     if (mSliceViewWidget == nullptr || mViewerSession == nullptr) {
         return;
@@ -159,7 +167,7 @@ void StackPage::updateDisplayedSlice()
     emit currentSliceChanged(mCurrentSliceIndex); // 通知一下缩略图滚动同步
 }
 
-void StackPage::handleSliceScrollRequested(int steps)   /// 滚轮切换切片
+void StackPage::handleSliceScrollRequested(int steps) /// 滚轮切换切片
 {
     if (steps == 0 || mViewerSession == nullptr) {
         return;

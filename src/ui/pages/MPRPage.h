@@ -4,7 +4,7 @@
 #include <QWidget>
 
 #include "core/model/volume/SliceOrientation.h"
-#include "ui/toolbars/StackToolMode.h"
+#include "ui/toolbars/SliceToolMode.h"
 
 class QLabel;
 class SliceViewWidget;
@@ -36,7 +36,8 @@ public:
     void setViewerSession(ViewerSession *viewerSession);
     void setRefreshEnabled(bool enabled);
 
-    void setToolMode(StackToolMode mode);
+    void setToolMode(SliceToolMode mode);
+    SliceToolMode toolMode() const;
     void triggerInvert();
     void triggerFlipHorizontal();
     void triggerFlipVertical();
@@ -60,7 +61,7 @@ private:
 
 private:
     ViewerSession *mViewerSession = nullptr;
-    StackToolMode  mToolMode      = StackToolMode::Pan;
+    SliceToolMode  mToolMode      = SliceToolMode::Pan;
     MPRViewType    mActiveView    = MPRViewType::Axial;
 
     // - 隐藏状态下收到 sessionChanged 只标记 mRefreshPending = true，不执行 refreshFromSession()，不渲染三窗格。

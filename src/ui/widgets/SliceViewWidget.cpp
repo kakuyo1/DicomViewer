@@ -304,7 +304,7 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
 
     emit activated();
 
-    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::WindowLevel) {
+    if (event->button() == Qt::LeftButton && mToolMode == SliceToolMode::WindowLevel) {
         mMouseDragActive       = true;
         mMouseDragStartPos     = event->pos();
         mDragStartWindowCenter = mCurrentWindowCenter;
@@ -313,7 +313,7 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Pan) {
+    if (event->button() == Qt::LeftButton && mToolMode == SliceToolMode::Pan) {
         mMouseDragActive    = true;
         mMouseDragStartPos  = event->pos();
         mDragStartPanOffset = mPanOffset;
@@ -321,7 +321,7 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Zoom) {
+    if (event->button() == Qt::LeftButton && mToolMode == SliceToolMode::Zoom) {
         mMouseDragActive     = true;
         mMouseDragStartPos   = event->pos();
         mDragStartZoomFactor = mZoomFactor;
@@ -329,7 +329,7 @@ void SliceViewWidget::mousePressEvent(QMouseEvent *event)
         return;
     }
 
-    if (event->button() == Qt::LeftButton && mToolMode == StackToolMode::Measure) {
+    if (event->button() == Qt::LeftButton && mToolMode == SliceToolMode::Measure) {
         QPointF imagePoint;
         if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
             mMeasurementLine     = QLineF(imagePoint, imagePoint);
@@ -364,7 +364,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (mMouseDragActive && mToolMode == StackToolMode::WindowLevel) {
+    if (mMouseDragActive && mToolMode == SliceToolMode::WindowLevel) {
         const QPoint delta = event->pos() - mMouseDragStartPos;
 
         constexpr double kWindowWidthSensitivity  = 1.0;
@@ -380,7 +380,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (mMouseDragActive && mToolMode == StackToolMode::Pan) {
+    if (mMouseDragActive && mToolMode == SliceToolMode::Pan) {
         const QSize widgetSize = size();
         if (widgetSize.width() > 0 && widgetSize.height() > 0 && mCameraStateInitialized) {
             const QPoint delta = event->pos() - mMouseDragStartPos;
@@ -401,7 +401,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (mMouseDragActive && mToolMode == StackToolMode::Zoom) {
+    if (mMouseDragActive && mToolMode == SliceToolMode::Zoom) {
         const QPoint delta          = event->pos() - mMouseDragStartPos;
         const double zoomMultiplier = std::pow(1.01, -delta.y()); /** @note 注意Qt中向下为y正方向 */
         mZoomFactor                 = std::clamp(mDragStartZoomFactor * zoomMultiplier, kMinimumZoomFactor, kMaximumZoomFactor);
@@ -414,7 +414,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (mMeasurementDragging && mToolMode == StackToolMode::Measure) {
+    if (mMeasurementDragging && mToolMode == SliceToolMode::Measure) {
         QPointF imagePoint;
         if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
             mMeasurementLine.setP2(imagePoint);
@@ -469,9 +469,9 @@ void SliceViewWidget::wheelEvent(QWheelEvent *event)
     event->accept();
 }
 
-void SliceViewWidget::setToolMode(StackToolMode mode)
+void SliceViewWidget::setToolMode(SliceToolMode mode)
 {
-    if (mToolMode == StackToolMode::Measure && mode != StackToolMode::Measure) {
+    if (mToolMode == SliceToolMode::Measure && mode != SliceToolMode::Measure) {
         clearMeasurement();
     }
     mToolMode            = mode;

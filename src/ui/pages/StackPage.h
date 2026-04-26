@@ -2,7 +2,7 @@
 
 #include <QWidget>
 
-#include "ui/toolbars/StackToolMode.h"
+#include "ui/toolbars/SliceToolMode.h"
 
 class SliceViewWidget;
 class ViewerSession;
@@ -17,7 +17,8 @@ public:
 
     void setViewerSession(ViewerSession *viewerSession);
     void setCurrentSliceIndex(int sliceIndex);
-    void setToolMode(StackToolMode mode);
+    void setToolMode(SliceToolMode mode);
+    SliceToolMode toolMode() const;
     void toggleInvert();
     void toggleFlipHorizontal();
     void toggleFlipVertical();
@@ -43,7 +44,7 @@ private:
     SliceViewWidget *mSliceViewWidget = nullptr;
     int mCurrentSliceIndex            = -1;
 
-    StackToolMode mToolMode           = StackToolMode::Pan;
+    SliceToolMode mToolMode           = SliceToolMode::Pan;
     bool mInvertEnabled               = false;
     bool mFlipHorizontalEnabled       = false;
     bool mFlipVerticalEnabled         = false;

@@ -3,7 +3,7 @@
 #include <QStackedWidget>
 
 #include "ui/model/ViewMode.h"
-#include "ui/toolbars/StackToolMode.h"
+#include "ui/toolbars/SliceToolMode.h"
 
 class StackPage;
 class MPRPage;
@@ -22,18 +22,14 @@ public:
     void     setViewMode(ViewMode mode);
     ViewMode currentViewMode() const;
 
-    void setToolMode(StackToolMode mode);
+    void setToolMode(SliceToolMode mode);
+    SliceToolMode currentToolMode() const;
     void triggerInvert();
     void triggerFlipHorizontal();
     void triggerFlipVertical();
     void resetCurrentView();
 
     void setCurrentStackSliceIndex(int sliceIndex);
-    void setStackToolMode(StackToolMode mode);
-    void triggerStackInvert();
-    void triggerStackFlipHorizontal();
-    void triggerStackFlipVertical();
-    void resetStackView();
 
 signals:
     void currentViewModeChanged(ViewMode mode);

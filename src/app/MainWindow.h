@@ -9,7 +9,7 @@
 class ImportController;
 class ViewerSession;
 class TitleBarWidget;
-class StackToolBar;
+class SliceToolBar;
 class ViewModeBar;
 class WorkSpaceWidget;
 class ThumbnailPanel;
@@ -37,7 +37,7 @@ private:
     ImportController * mImportController = nullptr;
     ViewerSession    * mViewerSession    = nullptr;
     TitleBarWidget   * mTitleBar         = nullptr;
-    StackToolBar     * mStackToolBar     = nullptr;
+    SliceToolBar     * mSliceToolBar     = nullptr;
     ViewModeBar      * mViewModeBar      = nullptr;
     WorkSpaceWidget  * mWorkSpaceWidget  = nullptr;
     ThumbnailPanel   * mThumbnailPanel   = nullptr;

@@ -86,10 +86,10 @@ ViewMode WorkSpaceWidget::currentViewMode() const
     return mCurrentViewMode;
 }
 
-void WorkSpaceWidget::setToolMode(StackToolMode mode)
+void WorkSpaceWidget::setToolMode(SliceToolMode mode)
 {
-    if (mCurrentViewMode == ViewMode::Stack) {
-        setStackToolMode(mode);
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        mStackPage->setToolMode(mode);
         return;
     }
     if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
@@ -97,10 +97,21 @@ void WorkSpaceWidget::setToolMode(StackToolMode mode)
     }
 }
 
+SliceToolMode WorkSpaceWidget::currentToolMode() const
+{
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        return mStackPage->toolMode();
+    }
+    if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
+        return mMPRPage->toolMode();
+    }
+    return SliceToolMode::Pan;
+}
+
 void WorkSpaceWidget::triggerInvert()
 {
-    if (mCurrentViewMode == ViewMode::Stack) {
-        triggerStackInvert();
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        mStackPage->toggleInvert();
         return;
     }
     if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
@@ -110,8 +121,8 @@ void WorkSpaceWidget::triggerInvert()
 
 void WorkSpaceWidget::triggerFlipHorizontal()
 {
-    if (mCurrentViewMode == ViewMode::Stack) {
-        triggerStackFlipHorizontal();
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        mStackPage->toggleFlipHorizontal();
         return;
     }
     if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
@@ -121,8 +132,8 @@ void WorkSpaceWidget::triggerFlipHorizontal()
 
 void WorkSpaceWidget::triggerFlipVertical()
 {
-    if (mCurrentViewMode == ViewMode::Stack) {
-        triggerStackFlipVertical();
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        mStackPage->toggleFlipVertical();
         return;
     }
     if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
@@ -132,8 +143,8 @@ void WorkSpaceWidget::triggerFlipVertical()
 
 void WorkSpaceWidget::resetCurrentView()
 {
-    if (mCurrentViewMode == ViewMode::Stack) {
-        resetStackView();
+    if (mCurrentViewMode == ViewMode::Stack && mStackPage != nullptr) {
+        mStackPage->resetView();
         return;
     }
     if (mCurrentViewMode == ViewMode::MPR && mMPRPage != nullptr) {
@@ -149,40 +160,5 @@ void WorkSpaceWidget::setCurrentStackSliceIndex(int sliceIndex)
 {
     if (mStackPage != nullptr) {
         mStackPage->setCurrentSliceIndex(sliceIndex);
-    }
-}
-
-void WorkSpaceWidget::setStackToolMode(StackToolMode mode)
-{
-    if (mStackPage != nullptr) {
-        mStackPage->setToolMode(mode);
-    }
-}
-
-void WorkSpaceWidget::triggerStackInvert()
-{
-    if (mStackPage != nullptr) {
-        mStackPage->toggleInvert();
-    }
-}
-
-void WorkSpaceWidget::triggerStackFlipHorizontal()
-{
-    if (mStackPage != nullptr) {
-        mStackPage->toggleFlipHorizontal();
-    }
-}
-
-void WorkSpaceWidget::triggerStackFlipVertical()
-{
-    if (mStackPage != nullptr) {
-        mStackPage->toggleFlipVertical();
-    }
-}
-
-void WorkSpaceWidget::resetStackView()
-{
-    if (mStackPage != nullptr) {
-        mStackPage->resetView();
     }
 }

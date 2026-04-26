@@ -123,13 +123,18 @@ void MPRPage::setRefreshEnabled(bool enabled)
     }
 }
 
-void MPRPage::setToolMode(StackToolMode mode)
+void MPRPage::setToolMode(SliceToolMode mode)
 {
     mToolMode                   = mode;
     SliceViewWidget *activeView = viewForType(mActiveView);
     if (activeView != nullptr) {
         activeView->setToolMode(mode);
     }
+}
+
+SliceToolMode MPRPage::toolMode() const
+{
+    return mToolMode;
 }
 
 void MPRPage::triggerInvert()

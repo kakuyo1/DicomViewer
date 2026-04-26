@@ -11,7 +11,7 @@
 #include "services/controller/ImportController.h"
 #include "services/model/ImportResult.h"
 #include "services/state/ViewerSession.h"
-#include "ui/toolbars/StackToolBar.h"
+#include "ui/toolbars/SliceToolBar.h"
 #include "ui/toolbars/ViewModeBar.h"
 #include "ui/widgets/WorkSpaceWidget.h"
 #include "ui/widgets/TitleBarWidget.h"
@@ -50,9 +50,9 @@ void MainWindow::setupUi()
     toolBarLayout->setContentsMargins(16, 12, 16, 12);
     toolBarLayout->setSpacing(0);
 
-    mStackToolBar = new StackToolBar(toolBarContainer);
+    mSliceToolBar = new SliceToolBar(toolBarContainer);
     toolBarLayout->addStretch();
-    toolBarLayout->addWidget(mStackToolBar);
+    toolBarLayout->addWidget(mSliceToolBar);
     toolBarLayout->addStretch();
 
     auto *toolBarShadow = new QWidget(central);
@@ -97,11 +97,11 @@ void MainWindow::setupConnects()
 {
     connect(mTitleBar, &TitleBarWidget::openFolderRequested, this, &MainWindow::handleOpenFolderRequested);
 
-    connect(mStackToolBar, &StackToolBar::toolModeChanged, mWorkSpaceWidget, &WorkSpaceWidget::setToolMode);
-    connect(mStackToolBar, &StackToolBar::invertTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerInvert);
-    connect(mStackToolBar, &StackToolBar::flipHorizontalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipHorizontal);
-    connect(mStackToolBar, &StackToolBar::flipVerticalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipVertical);
-    connect(mStackToolBar, &StackToolBar::resetTriggered, mWorkSpaceWidget, &WorkSpaceWidget::resetCurrentView);
+    connect(mSliceToolBar, &SliceToolBar::toolModeChanged, mWorkSpaceWidget, &WorkSpaceWidget::setToolMode);
+    connect(mSliceToolBar, &SliceToolBar::invertTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerInvert);
+    connect(mSliceToolBar, &SliceToolBar::flipHorizontalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipHorizontal);
+    connect(mSliceToolBar, &SliceToolBar::flipVerticalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipVertical);
+    connect(mSliceToolBar, &SliceToolBar::resetTriggered, mWorkSpaceWidget, &WorkSpaceWidget::resetCurrentView);
 
     // 用户点击缩略图切片 -> 主窗口渲染对应切片
     connect(mThumbnailPanel, &ThumbnailPanel::sliceActivated, mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);
@@ -151,14 +151,14 @@ void MainWindow::handleImportSucceeded(const ImportResult &result)
     setImportBusy(false);
 
     // 设置WindowLevel为默认工具，然后每次导入都重置一下上次工具造成的变化
-    if (mStackToolBar != nullptr) {
-        mStackToolBar->setActiveToolMode(StackToolMode::WindowLevel);
+    if (mSliceToolBar != nullptr) {
+        mSliceToolBar->setActiveToolMode(SliceToolMode::WindowLevel);
     }
 
     mViewerSession->setImportResult(result); /** @note 该函数不是每次导入都 new 一个新对象，而是原地覆盖这个对象，地址不变，所以不能用这个地址去判断 series 是否更新！ */
 
     if (mWorkSpaceWidget != nullptr) {
-        mWorkSpaceWidget->setToolMode(StackToolMode::WindowLevel);
+        mWorkSpaceWidget->setToolMode(SliceToolMode::WindowLevel);
         mWorkSpaceWidget->resetCurrentView();
     }
 
@@ -172,17 +172,12 @@ void MainWindow::handleViewModeChanged(ViewMode mode)
     if (mThumbnailPanel != nullptr) {
         mThumbnailPanel->setVisible(stackMode);
     }
-
-    if (mode == ViewMode::Stack) {
-        spdlog::info("View mode switched to: Stack View");
-        return;
+    // 只有 MPR 下才显示 Crosshair
+    if (mSliceToolBar != nullptr) {
+        mSliceToolBar->setCrosshairVisible(mode == ViewMode::MPR);
     }
-    if (mode == ViewMode::MPR) {
-        spdlog::info("View mode switched to: MPR View");
-        return;
-    }
-    if (mode == ViewMode::VR) {
-        spdlog::info("View mode switched to: VR View");
+    if (mSliceToolBar != nullptr && mWorkSpaceWidget != nullptr) {
+        mSliceToolBar->setActiveToolMode(mWorkSpaceWidget->currentToolMode());
     }
 }
 

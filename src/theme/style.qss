@@ -8,7 +8,7 @@
 #toolBarContainer,
 #contentContainer,
 #leftContainer,
-#stackToolBar,
+#sliceToolBar,
 #viewModeBar,
 #thumbnailPanel,
 #titleBarWidget {
@@ -99,13 +99,13 @@ QToolTip {
     );
 }
 
-#stackToolBar {
+#sliceToolBar {
     background-color: #181c23;
     border: 1px solid #353d4a;
     border-radius: 10px;
 }
 
-#stackToolBar QToolButton {
+#sliceToolBar QToolButton {
     min-height: 34px;
     padding: 0 16px;
     color: #dce4ef;
@@ -123,12 +123,12 @@ QToolTip {
     text-align: left;
 }
 
-#stackToolBar QToolButton::menu-indicator {
+#sliceToolBar QToolButton::menu-indicator {
     image: none;
     width: 0;
 }
 
-#stackToolBar QToolButton:hover {
+#sliceToolBar QToolButton:hover {
     background-color: qlineargradient(
         x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #3a4251,
@@ -141,7 +141,7 @@ QToolTip {
     border-bottom: 1px solid #526072;
 }
 
-#stackToolBar QToolButton:pressed {
+#sliceToolBar QToolButton:pressed {
     background-color: qlineargradient(
         x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #222833,
@@ -153,7 +153,7 @@ QToolTip {
     border-bottom: 1px solid #1c212a;
 }
 
-#stackToolBar QToolButton:checked {
+#sliceToolBar QToolButton:checked {
     color: #f4f8ff;
     background-color: qlineargradient(
         x1: 0, y1: 0, x2: 0, y2: 1,
@@ -167,7 +167,7 @@ QToolTip {
     border-bottom: 1px solid #6785ad;
 }
 
-#stackToolBarSeparator {
+#sliceToolBarSeparator {
     background-color: #3d4552;
     min-height: 24px;
     max-height: 24px;
