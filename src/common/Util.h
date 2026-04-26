@@ -4,11 +4,22 @@
 
 #include <spdlog/common.h>
 
+#include "core/model/volume/SliceOrientation.h"
+
 class QApplication;
 class DicomSliceInfo;
+struct VolumeData;
 
 namespace util
 {
+
+struct SlicePlaneGeometry
+{
+    int width       = 0;
+    int height      = 0;
+    double spacingX = 1.0;
+    double spacingY = 1.0;
+};
 
 QString resolveProjectRelativePath(const QString &relativePath);
 
@@ -32,4 +43,10 @@ QString formatDicomTime(const QString &rawTime);
 QString buildSexAgeText(const DicomSliceInfo &sliceInfo);
 
 QString formatSlicePositionText(const DicomSliceInfo &sliceInfo);
+
+int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation);
+
+SlicePlaneGeometry sliceGeometryForOrientation(const VolumeData &volumeData, SliceOrientation orientation);
+
+QString orientationText(SliceOrientation orientation);
 } // namespace util

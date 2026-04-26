@@ -4,58 +4,16 @@
 #include <array>
 #include <cstring>
 
+#include "common/Util.h"
+
 namespace
 {
 
 using WindowLevelLut = std::array<unsigned char, 65536>;
 
-int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
+qint16 voxelAt(const VolumeData &volumeData, int volumeX, int volumeY, int volumeZ)
 {
-    if (orientation == SliceOrientation::Axial) {
-        return volumeData.depth;
-    }
-    if (orientation == SliceOrientation::Coronal) {
-        return volumeData.height;
-    }
-    if (orientation == SliceOrientation::Sagittal) {
-        return volumeData.width;
-    }
-    return 0;
-}
-
-void setupInputGeometry(const VolumeData &volumeData, SliceOrientation orientation, SliceImageBuildInput *input)
-{
-    if (input == nullptr) {
-        return;
-    }
-
-    if (orientation == SliceOrientation::Axial) {
-        input->width    = volumeData.width;
-        input->height   = volumeData.height;
-        input->spacingX = volumeData.spacingX;
-        input->spacingY = volumeData.spacingY;
-        return;
-    }
-
-    if (orientation == SliceOrientation::Coronal) {
-        input->width    = volumeData.width;
-        input->height   = volumeData.depth;
-        input->spacingX = volumeData.spacingX;
-        input->spacingY = volumeData.spacingZ;
-        return;
-    }
-
-    if (orientation == SliceOrientation::Sagittal) {
-        input->width    = volumeData.height;
-        input->height   = volumeData.depth;
-        input->spacingX = volumeData.spacingY;
-        input->spacingY = volumeData.spacingZ;
-    }
-}
-
-qint16 voxelAt(const VolumeData &volumeData, int x, int y, int z)
-{
-    return volumeData.voxels[z * volumeData.width * volumeData.height + y * volumeData.width + x];
+    return volumeData.voxels[volumeZ * volumeData.width * volumeData.height + volumeY * volumeData.width + volumeX];
 }
 
 template <typename PixelAccessor> // 像素读取函数
@@ -181,43 +139,39 @@ QImage buildSliceImageInternal(int width, int height, const PixelAccessor &pixel
 
 } // namespace
 
+/// 只给 thumbnail 生成 axial slice 快照用。（线程安全快照）
+/// 这样后台线程只拿一份复制出来的 slice 像素，不直接读 ViewerSession / VolumeData。
+/// 否则如果用户重新导入 series，VolumeData 被覆盖，后台线程还在读旧地址，就有风险。
 SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData, int sliceIndex)
 {
-    return buildSliceImageInput(volumeData, SliceOrientation::Axial, sliceIndex);
-}
-
-SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex)
-{
     SliceImageBuildInput input;
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= volumeData.depth) {
         return input;
     }
 
-    setupInputGeometry(volumeData, orientation, &input);
-    if (input.width <= 0 || input.height <= 0) {
-        return input;
-    }
-
+    input.width                     = volumeData.width;
+    input.height                    = volumeData.height;
+    input.spacingX                  = volumeData.spacingX;
+    input.spacingY                  = volumeData.spacingY;
     input.hasPixelPaddingValue      = volumeData.hasPixelPaddingValue;
     input.pixelPaddingValue         = volumeData.pixelPaddingValue;
     input.hasPixelPaddingRangeLimit = volumeData.hasPixelPaddingRangeLimit;
     input.pixelPaddingRangeLimit    = volumeData.pixelPaddingRangeLimit;
 
-    input.pixels.resize(input.width * input.height);
-    for (int y = 0; y < input.height; ++y) {
-        for (int x = 0; x < input.width; ++x) {
-            if (orientation == SliceOrientation::Axial) {
-                input.pixels[y * input.width + x] = voxelAt(volumeData, x, y, sliceIndex);
-            } else if (orientation == SliceOrientation::Coronal) {
-                input.pixels[y * input.width + x] = voxelAt(volumeData, x, sliceIndex, y);
-            } else if (orientation == SliceOrientation::Sagittal) {
-                input.pixels[y * input.width + x] = voxelAt(volumeData, sliceIndex, x, y);
-            }
-        }
+    const int slicePixelCount = volumeData.width * volumeData.height;
+    const int sliceOffset     = sliceIndex * slicePixelCount;
+    if (sliceOffset < 0 || sliceOffset + slicePixelCount > volumeData.voxels.size()) {
+        input.pixels.clear();
+        return input;
     }
+
+    // Copy!
+    input.pixels = QVector<qint16>(volumeData.voxels.begin() + sliceOffset,
+                                   volumeData.voxels.begin() + sliceOffset + slicePixelCount);
     return input;
 }
 
+/// 给 SliceViewWidget 主视图/MPR 直接同步渲染用。
 /// for SliceViewWidget ，直接读 VolumeData，不拷贝，线程不安全
 QImage buildSliceImage(const VolumeData &volumeData, int sliceIndex, const SliceImageBuildOptions &options)
 {
@@ -226,19 +180,22 @@ QImage buildSliceImage(const VolumeData &volumeData, int sliceIndex, const Slice
 
 QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex, const SliceImageBuildOptions &options)
 {
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= util::sliceCountForOrientation(volumeData, orientation)) {
         return {};
     }
 
-    SliceImageBuildInput geometry;
-    setupInputGeometry(volumeData, orientation, &geometry);
+    const util::SlicePlaneGeometry geometry = util::sliceGeometryForOrientation(volumeData, orientation);
     if (geometry.width <= 0 || geometry.height <= 0) {
         return {};
     }
 
+    // 都是沿 volumeZ 从上到下
+    // Coronal  = 从每张 volumeZ 层里抽同一个 volumeY 行，拼成 XZ 面
+    // Sagittal = 从每张 volumeZ 层里抽同一个 volumeX 列，拼成 YZ 面
     return buildSliceImageInternal(
         geometry.width,
         geometry.height,
+        // use volumeData directly, no Copy!
         [&volumeData, orientation, sliceIndex](int x, int y) {
             if (orientation == SliceOrientation::Axial) {
                 return voxelAt(volumeData, x, y, sliceIndex);
@@ -246,7 +203,10 @@ QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientatio
             if (orientation == SliceOrientation::Coronal) {
                 return voxelAt(volumeData, x, sliceIndex, y);
             }
-            return voxelAt(volumeData, sliceIndex, x, y);
+            if (orientation == SliceOrientation::Sagittal) {
+                return voxelAt(volumeData, sliceIndex, x, y);
+            }
+            return voxelAt(volumeData, x, y, sliceIndex);
         },
         volumeData.hasPixelPaddingValue,
         volumeData.pixelPaddingValue,
@@ -255,6 +215,7 @@ QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientatio
         options);
 }
 
+/// 给 thumbnail 后台线程把快照转成 QImage 用。
 /// for thumbnail，拷贝一份VolumeData, 线程安全
 QImage buildSliceImage(const SliceImageBuildInput &input, const SliceImageBuildOptions &options)
 {
@@ -266,7 +227,7 @@ QImage buildSliceImage(const SliceImageBuildInput &input, const SliceImageBuildO
         input.width,
         input.height,
         [&input](int x, int y) {
-            return input.pixels[y * input.width + x];
+            return input.pixels[y * input.width + x]; // 缩略图一个 axial 方向就够了
         },
         input.hasPixelPaddingValue,
         input.pixelPaddingValue,

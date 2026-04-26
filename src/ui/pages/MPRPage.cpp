@@ -104,11 +104,23 @@ void MPRPage::setViewerSession(ViewerSession *viewerSession)
 
     mViewerSession = viewerSession;
     if (mViewerSession != nullptr) {
-        connect(mViewerSession, &ViewerSession::sessionChanged, this, &MPRPage::refreshFromSession);
+        connect(mViewerSession, &ViewerSession::sessionChanged, this, &MPRPage::handleSessionChanged);
         connect(mViewerSession, &ViewerSession::sessionCleared, this, &MPRPage::clearDisplay);
     }
 
-    refreshFromSession();
+    handleSessionChanged();
+}
+
+void MPRPage::setRefreshEnabled(bool enabled)
+{
+    if (mRefreshEnabled == enabled) {
+        return;
+    }
+
+    mRefreshEnabled = enabled;
+    if (mRefreshEnabled && mRefreshPending) {
+        refreshFromSession();
+    }
 }
 
 void MPRPage::setToolMode(StackToolMode mode)
@@ -160,34 +172,36 @@ void MPRPage::resetView()
 {
     resetSliceStates();
     if (mSagittalView != nullptr) {
-        mSagittalView->resetViewState();
+        mSagittalView->resetViewState(false);
     }
     if (mCoronalView != nullptr) {
-        mCoronalView->resetViewState();
+        mCoronalView->resetViewState(false);
     }
     if (mAxialView != nullptr) {
-        mAxialView->resetViewState();
+        mAxialView->resetViewState(false);
     }
     updateAllViews();
 }
 
-void MPRPage::refreshFromSession()
+void MPRPage::refreshFromSession() // 属于加载完一次series后开始初始化
 {
     resetSliceStates();
     if (mSagittalView != nullptr) {
-        mSagittalView->resetViewState();
+        mSagittalView->resetViewState(false);
     }
     if (mCoronalView != nullptr) {
-        mCoronalView->resetViewState();
+        mCoronalView->resetViewState(false);
     }
     if (mAxialView != nullptr) {
-        mAxialView->resetViewState();
+        mAxialView->resetViewState(false);
     }
     updateAllViews();
 }
 
 void MPRPage::clearDisplay()
 {
+    mRefreshPending = true;
+
     mSagittalState = MPRSliceState();
     mCoronalState  = MPRSliceState();
     mAxialState    = MPRSliceState();
@@ -201,6 +215,16 @@ void MPRPage::clearDisplay()
     if (mAxialView != nullptr) {
         mAxialView->clearDisplay();
     }
+}
+
+void MPRPage::handleSessionChanged()
+{
+    mRefreshPending = true;
+    if (!mRefreshEnabled) { // 如果还没有进入过 MPR ，比如还在Stack,那么就会跳过不渲染 MPR
+        return;
+    }
+
+    refreshFromSession();
 }
 
 void MPRPage::resetSliceStates()
@@ -223,6 +247,8 @@ void MPRPage::resetSliceStates()
 
 void MPRPage::updateAllViews()
 {
+    mRefreshPending = false;
+
     updateView(MPRViewType::Sagittal);
     updateView(MPRViewType::Coronal);
     updateView(MPRViewType::Axial);

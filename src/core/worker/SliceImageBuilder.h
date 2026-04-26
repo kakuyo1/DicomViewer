@@ -50,10 +50,6 @@ unsigned char mapWindowLevel(qint16 value,
 SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData,
                                            int sliceIndex);
 
-SliceImageBuildInput buildSliceImageInput(const VolumeData &volumeData,
-                                           SliceOrientation orientation,
-                                           int sliceIndex);
-
 QImage buildSliceImage(const VolumeData &volumeData,
                        int sliceIndex,
                        const SliceImageBuildOptions &options);

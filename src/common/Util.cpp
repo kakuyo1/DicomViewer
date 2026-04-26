@@ -1,5 +1,6 @@
 #include "common/Util.h"
 #include "core/model/dicom/DicomSliceInfo.h"
+#include "core/model/volume/VolumeData.h"
 
 #include <QApplication>
 #include <QCoreApplication>
@@ -143,6 +144,64 @@ QString formatSlicePositionText(const DicomSliceInfo &sliceInfo)
         return QStringLiteral("Location: %1 mm").arg(sliceInfo.sliceLocation, 0, 'f', 2);
     }
     return {};
+}
+
+int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
+{
+    if (orientation == SliceOrientation::Axial) {
+        return volumeData.depth;
+    }
+    if (orientation == SliceOrientation::Coronal) {
+        return volumeData.height;
+    }
+    if (orientation == SliceOrientation::Sagittal) {
+        return volumeData.width;
+    }
+    return 0;
+}
+
+SlicePlaneGeometry sliceGeometryForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
+{
+    SlicePlaneGeometry geometry;
+
+    if (orientation == SliceOrientation::Axial) {
+        geometry.width    = volumeData.width;
+        geometry.height   = volumeData.height;
+        geometry.spacingX = volumeData.spacingX;
+        geometry.spacingY = volumeData.spacingY;
+        return geometry;
+    }
+
+    if (orientation == SliceOrientation::Coronal) {
+        geometry.width    = volumeData.width;
+        geometry.height   = volumeData.depth;
+        geometry.spacingX = volumeData.spacingX;
+        geometry.spacingY = volumeData.spacingZ;
+        return geometry;
+    }
+
+    if (orientation == SliceOrientation::Sagittal) {
+        geometry.width    = volumeData.height;
+        geometry.height   = volumeData.depth;
+        geometry.spacingX = volumeData.spacingY;
+        geometry.spacingY = volumeData.spacingZ;
+    }
+
+    return geometry;
+}
+
+QString orientationText(SliceOrientation orientation)
+{
+    if (orientation == SliceOrientation::Axial) {
+        return QStringLiteral("Axial");
+    }
+    if (orientation == SliceOrientation::Coronal) {
+        return QStringLiteral("Coronal");
+    }
+    if (orientation == SliceOrientation::Sagittal) {
+        return QStringLiteral("Sagittal");
+    }
+    return QStringLiteral("Unknown");
 }
 
 } // namespace util

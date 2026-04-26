@@ -42,7 +42,7 @@ public:
     void setInvertEnabled(bool enabled);
     void setFlipHorizontalEnabled(bool enabled);
     void setFlipVerticalEnabled(bool enabled);
-    void resetViewState();
+    void resetViewState(bool renderImmediately = true);
 
 signals:
     void activated();

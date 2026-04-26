@@ -33,69 +33,6 @@ constexpr double kMinimumZoomFactor             = 0.1;
 constexpr double kMaximumZoomFactor             = 20.0;
 constexpr double kMeasurementTickSpacingMm      = 20.0;
 
-int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orientation)
-{
-    if (orientation == SliceOrientation::Axial) {
-        return volumeData.depth;
-    }
-    if (orientation == SliceOrientation::Coronal) {
-        return volumeData.height;
-    }
-    if (orientation == SliceOrientation::Sagittal) {
-        return volumeData.width;
-    }
-    return 0;
-}
-
-void setupSliceGeometry(const VolumeData &volumeData,
-                        SliceOrientation  orientation,
-                        int              *width,
-                        int              *height,
-                        double           *spacingX,
-                        double           *spacingY)
-{
-    if (width == nullptr || height == nullptr || spacingX == nullptr || spacingY == nullptr) {
-        return;
-    }
-
-    if (orientation == SliceOrientation::Axial) {
-        *width    = volumeData.width;
-        *height   = volumeData.height;
-        *spacingX = volumeData.spacingX;
-        *spacingY = volumeData.spacingY;
-        return;
-    }
-
-    if (orientation == SliceOrientation::Coronal) {
-        *width    = volumeData.width;
-        *height   = volumeData.depth;
-        *spacingX = volumeData.spacingX;
-        *spacingY = volumeData.spacingZ;
-        return;
-    }
-
-    if (orientation == SliceOrientation::Sagittal) {
-        *width    = volumeData.height;
-        *height   = volumeData.depth;
-        *spacingX = volumeData.spacingY;
-        *spacingY = volumeData.spacingZ;
-    }
-}
-
-QString orientationText(SliceOrientation orientation)
-{
-    if (orientation == SliceOrientation::Axial) {
-        return QStringLiteral("Axial");
-    }
-    if (orientation == SliceOrientation::Coronal) {
-        return QStringLiteral("Coronal");
-    }
-    if (orientation == SliceOrientation::Sagittal) {
-        return QStringLiteral("Sagittal");
-    }
-    return QStringLiteral("Unknown");
-}
-
 /** @note 空操作 interactor style，用来清空原生VTK Interactor的键鼠操作，不能直接disable interactor,因为它包含VTK的事件循环，会直接黑屏！ */
 class StackNoOpInteractorStyle : public vtkInteractorStyleUser
 {
@@ -163,7 +100,7 @@ void SliceViewWidget::showAxialSlice(const DicomSeries &series, const VolumeData
 
 void SliceViewWidget::showSlice(const DicomSeries &series, const VolumeData &volumeData, SliceOrientation orientation, int sliceIndex)
 {
-    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= sliceCountForOrientation(volumeData, orientation)) {
+    if (!volumeData.isValid() || sliceIndex < 0 || sliceIndex >= util::sliceCountForOrientation(volumeData, orientation)) {
         clearDisplay();
         return;
     }
@@ -197,7 +134,7 @@ void SliceViewWidget::showSlice(const DicomSeries &series, const VolumeData &vol
 
 void SliceViewWidget::renderCurrentSlice()
 {
-    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
+    if (mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= util::sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
         clearDisplay();
         return;
     }
@@ -205,11 +142,11 @@ void SliceViewWidget::renderCurrentSlice()
     const VolumeData &volumeData = *mCurrentVolumeData;
 
     // 确定 slice 方位的四件套：
-    int    width    = 0;
-    int    height   = 0;
-    double spacingX = 1.0;
-    double spacingY = 1.0;
-    setupSliceGeometry(volumeData, mCurrentOrientation, &width, &height, &spacingX, &spacingY);
+    const util::SlicePlaneGeometry geometry = util::sliceGeometryForOrientation(volumeData, mCurrentOrientation);
+    const int width                         = geometry.width;
+    const int height                        = geometry.height;
+    const double spacingX                   = geometry.spacingX;
+    const double spacingY                   = geometry.spacingY;
     if (width <= 0 || height <= 0) {
         clearDisplay();
         return;
@@ -565,7 +502,7 @@ void SliceViewWidget::setFlipVerticalEnabled(bool enabled)
     renderCurrentSlice();
 }
 
-void SliceViewWidget::resetViewState()
+void SliceViewWidget::resetViewState(bool renderImmediately)
 {
     mInvertEnabled          = false;
     mFlipHorizontalEnabled  = false;
@@ -577,7 +514,9 @@ void SliceViewWidget::resetViewState()
     clearMeasurement();
     resetWindowLevelToDefault();
     emitDisplayParametersChanged();
-    renderCurrentSlice();
+    if (renderImmediately) {
+        renderCurrentSlice();
+    }
 }
 
 void SliceViewWidget::emitDisplayParametersChanged()
@@ -716,7 +655,7 @@ void SliceViewWidget::updateOverlayInfo()
         return;
     }
 
-    if (mCurrentSeries == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSeries->slices.isEmpty() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
+    if (mCurrentSeries == nullptr || mCurrentVolumeData == nullptr || !mCurrentVolumeData->isValid() || mCurrentSeries->slices.isEmpty() || mCurrentSliceIndex < 0 || mCurrentSliceIndex >= util::sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation)) {
         mImageOverlayWidget->clearOverlay();
         return;
     }
@@ -773,12 +712,12 @@ void SliceViewWidget::updateOverlayInfo()
     if (!seriesText.isEmpty()) {
         overlayInfo.bottomLeftLines.push_back(seriesText);
     }
-    const int orientationSliceCount = sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation);
+    const int orientationSliceCount = util::sliceCountForOrientation(*mCurrentVolumeData, mCurrentOrientation);
     if (mCurrentOrientation == SliceOrientation::Axial && sliceInfo.hasInstanceNumber) {
         overlayInfo.bottomLeftLines.push_back(QStringLiteral("Image %1 / %2").arg(sliceInfo.instanceNumber).arg(mCurrentVolumeData->depth));
     } else {
         overlayInfo.bottomLeftLines.push_back(QStringLiteral("%1 %2 / %3")
-                                                  .arg(orientationText(mCurrentOrientation))
+                                                  .arg(util::orientationText(mCurrentOrientation))
                                                   .arg(mCurrentSliceIndex + 1)
                                                   .arg(orientationSliceCount));
     }

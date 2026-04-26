@@ -19,10 +19,10 @@ enum class MPRViewType
 
 struct MPRSliceState
 {
-    int sliceIndex         = -1;
-    bool invert            = false;
-    bool flipHorizontal    = false;
-    bool flipVertical      = false;
+    int  sliceIndex     = -1;
+    bool invert         = false;
+    bool flipHorizontal = false;
+    bool flipVertical   = false;
 };
 
 class MPRPage : public QWidget
@@ -34,6 +34,7 @@ public:
     ~MPRPage();
 
     void setViewerSession(ViewerSession *viewerSession);
+    void setRefreshEnabled(bool enabled);
 
     void setToolMode(StackToolMode mode);
     void triggerInvert();
@@ -42,28 +43,36 @@ public:
     void resetView();
 
 private:
-    void setupUi();
-    void refreshFromSession();
-    void clearDisplay();
-    QWidget *createViewPane(const QString &title, const QString &objectName, SliceViewWidget **viewWidget);
-    void resetSliceStates();
-    void updateAllViews();
-    void updateView(MPRViewType viewType);
-    void handleSliceScrollRequested(MPRViewType viewType, int steps);
-    void setActiveView(MPRViewType viewType);
+    void             setupUi();
+    void             refreshFromSession();
+    void             clearDisplay();
+    QWidget         *createViewPane(const QString &title, const QString &objectName, SliceViewWidget **viewWidget);
+    void             handleSessionChanged();
+    void             resetSliceStates();
+    void             updateAllViews();
+    void             updateView(MPRViewType viewType);
+    void             handleSliceScrollRequested(MPRViewType viewType, int steps);
+    void             setActiveView(MPRViewType viewType);
     SliceViewWidget *viewForType(MPRViewType viewType) const;
-    MPRSliceState *stateForType(MPRViewType viewType);
+    MPRSliceState   *stateForType(MPRViewType viewType);
     SliceOrientation orientationForType(MPRViewType viewType) const;
-    int sliceCountForType(MPRViewType viewType) const;
+    int              sliceCountForType(MPRViewType viewType) const;
 
 private:
-    ViewerSession *mViewerSession       = nullptr;
-    SliceViewWidget *mSagittalView      = nullptr;
-    SliceViewWidget *mCoronalView       = nullptr;
-    SliceViewWidget *mAxialView         = nullptr;
-    MPRViewType mActiveView             = MPRViewType::Axial;
+    ViewerSession *mViewerSession = nullptr;
+    StackToolMode  mToolMode      = StackToolMode::Pan;
+    MPRViewType    mActiveView    = MPRViewType::Axial;
+
+    // - 隐藏状态下收到 sessionChanged 只标记 mRefreshPending = true，不执行 refreshFromSession()，不渲染三窗格。
+    // - 切到 MPR View 时，如果有 pending session，再执行一次刷新。
+    bool mRefreshEnabled = false;
+    bool mRefreshPending = true;
+
+    SliceViewWidget *mSagittalView = nullptr;
+    SliceViewWidget *mCoronalView  = nullptr;
+    SliceViewWidget *mAxialView    = nullptr;
+
     MPRSliceState mSagittalState;
     MPRSliceState mCoronalState;
     MPRSliceState mAxialState;
-    StackToolMode  mToolMode            = StackToolMode::Pan;
 };
