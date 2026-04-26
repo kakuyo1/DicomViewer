@@ -415,6 +415,7 @@ void SliceViewWidget::mouseMoveEvent(QMouseEvent *event)
         mWindowLevelInitialized = true;
 
         emitDisplayParametersChanged();
+        emit windowLevelEdited(mCurrentWindowCenter, mCurrentWindowWidth);
         renderCurrentSlice();
         event->accept();
         return;
@@ -534,6 +535,18 @@ void SliceViewWidget::setToolMode(SliceToolMode mode)
     mMeasurementDragging = false;
 }
 
+void SliceViewWidget::setWindowLevel(double windowCenter, double windowWidth)
+{
+    if (mWindowLevelInitialized && mCurrentWindowCenter == windowCenter && mCurrentWindowWidth == windowWidth) {
+        return;
+    }
+
+    mCurrentWindowCenter    = windowCenter;
+    mCurrentWindowWidth     = windowWidth;
+    mWindowLevelInitialized = true;
+    renderCurrentSlice();
+}
+
 void SliceViewWidget::setInvertEnabled(bool enabled)
 {
     mInvertEnabled = enabled;
@@ -566,7 +579,7 @@ void SliceViewWidget::setCrosshairImagePoint(const QPointF &imagePoint)
 
 void SliceViewWidget::clearCrosshair()
 {
-    mCrosshairVisible    = false;
+    mCrosshairVisible    = false; // ！
     mCrosshairDragging   = false;
     mCrosshairImagePoint = QPointF();
     update();

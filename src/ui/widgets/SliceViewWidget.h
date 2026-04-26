@@ -39,6 +39,7 @@ public:
     void clearDisplay();
 
     void setToolMode(SliceToolMode mode);
+    void setWindowLevel(double windowCenter, double windowWidth);
     void setInvertEnabled(bool enabled);
     void setFlipHorizontalEnabled(bool enabled);
     void setFlipVerticalEnabled(bool enabled);
@@ -51,6 +52,7 @@ signals:
     void imagePointPressed(const QPointF &imagePoint);
     void imagePointDragged(const QPointF &imagePoint);
     void sliceScrollRequested(int steps);
+    void windowLevelEdited(double windowCenter, double windowWidth);
     void displayParametersChanged(double windowCenter,
                                   double windowWidth,
                                   bool invert,

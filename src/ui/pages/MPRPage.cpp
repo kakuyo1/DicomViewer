@@ -65,6 +65,17 @@ void MPRPage::setupUi()
         handleSliceScrollRequested(MPRViewType::Axial, steps);
     });
 
+    // WW/WL 同步
+    connect(mSagittalView, &SliceViewWidget::windowLevelEdited, this, [this](double windowCenter, double windowWidth) {
+        handleWindowLevelEdited(MPRViewType::Sagittal, windowCenter, windowWidth);
+    });
+    connect(mCoronalView, &SliceViewWidget::windowLevelEdited, this, [this](double windowCenter, double windowWidth) {
+        handleWindowLevelEdited(MPRViewType::Coronal, windowCenter, windowWidth);
+    });
+    connect(mAxialView, &SliceViewWidget::windowLevelEdited, this, [this](double windowCenter, double windowWidth) {
+        handleWindowLevelEdited(MPRViewType::Axial, windowCenter, windowWidth);
+    });
+
     // Crosshair 功能下鼠标按下
     connect(mSagittalView, &SliceViewWidget::imagePointPressed, this, [this](const QPointF &imagePoint) {
         handleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
@@ -151,11 +162,17 @@ void MPRPage::setRefreshEnabled(bool enabled)
 
 void MPRPage::setToolMode(SliceToolMode mode)
 {
-    mToolMode                   = mode;
-    SliceViewWidget *activeView = viewForType(mActiveView);
-    if (activeView != nullptr) {
-        activeView->setToolMode(mode);
+    mToolMode = mode;
+    if (mSagittalView != nullptr) {
+        mSagittalView->setToolMode(mode);
     }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setToolMode(mode);
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setToolMode(mode);
+    }
+    updateCrosshairForAllViews(); // 非 crosshair 按钮立刻隐藏十字线
 }
 
 SliceToolMode MPRPage::toolMode() const
@@ -165,38 +182,68 @@ SliceToolMode MPRPage::toolMode() const
 
 void MPRPage::triggerInvert()
 {
-    MPRSliceState   *state = stateForType(mActiveView);
-    SliceViewWidget *view  = viewForType(mActiveView);
-    if (state == nullptr || view == nullptr) {
+    MPRSliceState *activeState = stateForType(mActiveView);
+    if (activeState == nullptr) {
         return;
     }
 
-    state->invert = !state->invert;
-    view->setInvertEnabled(state->invert);
+    const bool enabled    = !activeState->invert;
+    mSagittalState.invert = enabled;
+    mCoronalState.invert  = enabled;
+    mAxialState.invert    = enabled;
+    if (mSagittalView != nullptr) {
+        mSagittalView->setInvertEnabled(enabled);
+    }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setInvertEnabled(enabled);
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setInvertEnabled(enabled);
+    }
 }
 
 void MPRPage::triggerFlipHorizontal()
 {
-    MPRSliceState   *state = stateForType(mActiveView);
-    SliceViewWidget *view  = viewForType(mActiveView);
-    if (state == nullptr || view == nullptr) {
+    MPRSliceState *activeState = stateForType(mActiveView);
+    if (activeState == nullptr) {
         return;
     }
 
-    state->flipHorizontal = !state->flipHorizontal;
-    view->setFlipHorizontalEnabled(state->flipHorizontal);
+    const bool enabled            = !activeState->flipHorizontal;
+    mSagittalState.flipHorizontal = enabled;
+    mCoronalState.flipHorizontal  = enabled;
+    mAxialState.flipHorizontal    = enabled;
+    if (mSagittalView != nullptr) {
+        mSagittalView->setFlipHorizontalEnabled(enabled);
+    }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setFlipHorizontalEnabled(enabled);
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setFlipHorizontalEnabled(enabled);
+    }
 }
 
 void MPRPage::triggerFlipVertical()
 {
-    MPRSliceState   *state = stateForType(mActiveView);
-    SliceViewWidget *view  = viewForType(mActiveView);
-    if (state == nullptr || view == nullptr) {
+    MPRSliceState *activeState = stateForType(mActiveView);
+    if (activeState == nullptr) {
         return;
     }
 
-    state->flipVertical = !state->flipVertical;
-    view->setFlipVerticalEnabled(state->flipVertical);
+    const bool enabled          = !activeState->flipVertical;
+    mSagittalState.flipVertical = enabled;
+    mCoronalState.flipVertical  = enabled;
+    mAxialState.flipVertical    = enabled;
+    if (mSagittalView != nullptr) {
+        mSagittalView->setFlipVerticalEnabled(enabled);
+    }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setFlipVerticalEnabled(enabled);
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setFlipVerticalEnabled(enabled);
+    }
 }
 
 void MPRPage::resetView()
@@ -317,19 +364,44 @@ void MPRPage::updateView(MPRViewType viewType)
 
 void MPRPage::handleSliceScrollRequested(MPRViewType viewType, int steps)
 {
-    MPRSliceState *state = stateForType(viewType);
-    if (state == nullptr || steps == 0) {
+    Q_UNUSED(viewType)
+
+    if (steps == 0) {
         return;
     }
 
-    const int sliceCount = sliceCountForType(viewType);
-    if (sliceCount <= 0) {
+    const int sagittalSliceCount = sliceCountForType(MPRViewType::Sagittal);
+    const int coronalSliceCount  = sliceCountForType(MPRViewType::Coronal);
+    const int axialSliceCount    = sliceCountForType(MPRViewType::Axial);
+
+    if (sagittalSliceCount > 0) {
+        mSagittalState.sliceIndex = std::clamp(mSagittalState.sliceIndex + steps, 0, sagittalSliceCount - 1);
+    }
+    if (coronalSliceCount > 0) {
+        mCoronalState.sliceIndex = std::clamp(mCoronalState.sliceIndex + steps, 0, coronalSliceCount - 1);
+    }
+    if (axialSliceCount > 0) {
+        mAxialState.sliceIndex = std::clamp(mAxialState.sliceIndex + steps, 0, axialSliceCount - 1);
+    }
+
+    updateAllViews();
+}
+
+void MPRPage::handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth)
+{
+    if (mToolMode != SliceToolMode::WindowLevel) {
         return;
     }
 
-    state->sliceIndex = std::clamp(state->sliceIndex + steps, 0, sliceCount - 1);
-    updateView(viewType);         // 先渲染图
-    updateCrosshairForAllViews(); // 再三视图同步
+    if (viewType != MPRViewType::Sagittal && mSagittalView != nullptr) {
+        mSagittalView->setWindowLevel(windowCenter, windowWidth);
+    }
+    if (viewType != MPRViewType::Coronal && mCoronalView != nullptr) {
+        mCoronalView->setWindowLevel(windowCenter, windowWidth);
+    }
+    if (viewType != MPRViewType::Axial && mAxialView != nullptr) {
+        mAxialView->setWindowLevel(windowCenter, windowWidth);
+    }
 }
 
 void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint)
@@ -356,7 +428,8 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
 void MPRPage::updateCrosshairForAllViews()
 {
     const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
-    if (volumeData == nullptr || !volumeData->isValid()) {
+
+    if (mToolMode != SliceToolMode::Crosshair || volumeData == nullptr || !volumeData->isValid()) {
         if (mSagittalView != nullptr) {
             mSagittalView->clearCrosshair();
         }

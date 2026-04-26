@@ -15,22 +15,22 @@ public:
     explicit StackPage(QWidget *parent = nullptr);
     ~StackPage();
 
-    void setViewerSession(ViewerSession *viewerSession);
-    void setCurrentSliceIndex(int sliceIndex);
-    void setToolMode(SliceToolMode mode);
+    void          setViewerSession(ViewerSession *viewerSession);
+    void          setCurrentSliceIndex(int sliceIndex);
+    void          setToolMode(SliceToolMode mode);
     SliceToolMode toolMode() const;
-    void toggleInvert();
-    void toggleFlipHorizontal();
-    void toggleFlipVertical();
-    void resetView();
+    void          toggleInvert();
+    void          toggleFlipHorizontal();
+    void          toggleFlipVertical();
+    void          resetView();
 
 signals:
     void currentSliceChanged(int sliceIndex);
     void displayParametersChanged(double windowCenter,
                                   double windowWidth,
-                                  bool invert,
-                                  bool flipHorizontal,
-                                  bool flipVertical);
+                                  bool   invert,
+                                  bool   flipHorizontal,
+                                  bool   flipVertical);
 
 private:
     void setupUi();
@@ -40,12 +40,12 @@ private:
     void clearDisplay();
 
 private:
-    ViewerSession   *mViewerSession   = nullptr;
-    SliceViewWidget *mSliceViewWidget = nullptr;
-    int mCurrentSliceIndex            = -1;
+    ViewerSession   *mViewerSession     = nullptr;
+    SliceViewWidget *mSliceViewWidget   = nullptr;
+    int              mCurrentSliceIndex = -1;
 
-    SliceToolMode mToolMode           = SliceToolMode::Pan;
-    bool mInvertEnabled               = false;
-    bool mFlipHorizontalEnabled       = false;
-    bool mFlipVerticalEnabled         = false;
+    SliceToolMode mToolMode              = SliceToolMode::WindowLevel;
+    bool          mInvertEnabled         = false;
+    bool          mFlipHorizontalEnabled = false;
+    bool          mFlipVerticalEnabled   = false;
 };

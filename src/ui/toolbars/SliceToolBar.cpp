@@ -16,7 +16,6 @@ SliceToolBar::SliceToolBar(QWidget *parent)
 
 SliceToolBar::~SliceToolBar()
 {
-
 }
 
 void SliceToolBar::setupUi()
@@ -34,9 +33,9 @@ void SliceToolBar::setupUi()
     mModeGroup = new QButtonGroup(this);
     mModeGroup->setExclusive(true);
 
-    mPanButton         = createToolButton(QStringLiteral(" Pan"),     QStringLiteral("resources/icons/Pan.png"),     true);
-    mZoomButton        = createToolButton(QStringLiteral(" Zoom"),    QStringLiteral("resources/icons/Zoom.png"),    true);
-    mWindowLevelButton = createToolButton(QStringLiteral(" WW/WL"),   QStringLiteral("resources/icons/WW-WL.png"),   true);
+    mPanButton         = createToolButton(QStringLiteral(" Pan"), QStringLiteral("resources/icons/Pan.png"), true);
+    mZoomButton        = createToolButton(QStringLiteral(" Zoom"), QStringLiteral("resources/icons/Zoom.png"), true);
+    mWindowLevelButton = createToolButton(QStringLiteral(" WW/WL"), QStringLiteral("resources/icons/WW-WL.png"), true);
     mMeasureButton     = createToolButton(QStringLiteral(" Measure"), QStringLiteral("resources/icons/Measure.png"), true);
     mCrosshairButton   = createToolButton(QStringLiteral(" Crosshair"), QStringLiteral("resources/icons/Crosshair.png"), true);
 
@@ -71,11 +70,11 @@ void SliceToolBar::setupUi()
     mResetButton = createToolButton(QStringLiteral(" Reset"), QStringLiteral("resources/icons/Reset.png"), false);
     layout->addWidget(mResetButton);
 
-    connect(mModeGroup,    &QButtonGroup::buttonClicked, this, &SliceToolBar::handleModeButtonClicked);
-    connect(mFlipHButton,  &QToolButton::clicked,        this, &SliceToolBar::flipHorizontalTriggered);
-    connect(mFlipVButton,  &QToolButton::clicked,        this, &SliceToolBar::flipVerticalTriggered);
-    connect(mInvertButton, &QToolButton::clicked,        this, &SliceToolBar::invertTriggered);
-    connect(mResetButton,  &QToolButton::clicked,        this, &SliceToolBar::resetTriggered);
+    connect(mModeGroup, &QButtonGroup::buttonClicked, this, &SliceToolBar::handleModeButtonClicked);
+    connect(mFlipHButton, &QToolButton::clicked, this, &SliceToolBar::flipHorizontalTriggered);
+    connect(mFlipVButton, &QToolButton::clicked, this, &SliceToolBar::flipVerticalTriggered);
+    connect(mInvertButton, &QToolButton::clicked, this, &SliceToolBar::invertTriggered);
+    connect(mResetButton, &QToolButton::clicked, this, &SliceToolBar::resetTriggered);
 
     mPanButton->setChecked(true);
     setCrosshairVisible(false);

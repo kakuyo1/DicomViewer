@@ -37,12 +37,12 @@ public:
     void setViewerSession(ViewerSession *viewerSession);
     void setRefreshEnabled(bool enabled);
 
-    void setToolMode(SliceToolMode mode);
+    void          setToolMode(SliceToolMode mode);
     SliceToolMode toolMode() const;
-    void triggerInvert();
-    void triggerFlipHorizontal();
-    void triggerFlipVertical();
-    void resetView();
+    void          triggerInvert();
+    void          triggerFlipHorizontal();
+    void          triggerFlipVertical();
+    void          resetView();
 
 private:
     void             setupUi();
@@ -54,6 +54,7 @@ private:
     void             updateAllViews();
     void             updateView(MPRViewType viewType);
     void             handleSliceScrollRequested(MPRViewType viewType, int steps);
+    void             handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth);
     void             handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
     void             updateCrosshairForAllViews();
     int              imageMmToVoxelIndex(double valueMm, double spacing, int count) const;
@@ -65,7 +66,7 @@ private:
 
 private:
     ViewerSession *mViewerSession = nullptr;
-    SliceToolMode  mToolMode      = SliceToolMode::Pan;
+    SliceToolMode  mToolMode      = SliceToolMode::WindowLevel;
     MPRViewType    mActiveView    = MPRViewType::Axial;
 
     // - 隐藏状态下收到 sessionChanged 只标记 mRefreshPending = true，不执行 refreshFromSession()，不渲染三窗格。
