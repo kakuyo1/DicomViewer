@@ -377,6 +377,10 @@ void MPRPage::handleSliceScrollRequested(MPRViewType viewType, int steps)
     }
 
     updateView(viewType);
+
+    if (mToolMode == SliceToolMode::Crosshair) {
+        updateCrosshairForAllViews();
+    }
 }
 
 void MPRPage::handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth)
@@ -411,7 +415,7 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
     // 所以这里要先把 点击点 反解回 未翻转坐标，然后再用它更新三维体素位置。（用当前显示 imagePoint 反解出来的原始平面坐标更新体素）
     // 你不能用反转后的 imagePoint 去更新三维体素位置(x,y,z)! 因为虽然进行了翻转，但是你想要的点在三维体素中还是同一个
     // 记住：更新体素坐标要用原始未翻转的平面坐标，更新十字线则在体素坐标投影后直接翻转。关键是找到那个不变的体素坐标
-    const QPointF unflippedPoint = mapPointThroughViewFlips(viewType, imagePoint);
+    const QPointF unflippedPoint = mirrorPointForViewFlips(viewType, imagePoint);
 
     // 更新三维体素位置
     if (viewType == MPRViewType::Axial) {
@@ -457,15 +461,15 @@ void MPRPage::updateCrosshairForAllViews()
     // 2.如果是 单次点击 flipH/V, 则只是体素坐标投影后单纯翻转。
     // 注意：这里的体素坐标是基于未翻转的原始平面坐标得到的！
     if (mSagittalView != nullptr) {
-        const QPointF sagittalPoint = mapPointThroughViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
+        const QPointF sagittalPoint = mirrorPointForViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
         mSagittalView->setCrosshairImagePoint(sagittalPoint);
     }
     if (mCoronalView != nullptr) {
-        const QPointF coronalPoint = mapPointThroughViewFlips(MPRViewType::Coronal, QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
+        const QPointF coronalPoint = mirrorPointForViewFlips(MPRViewType::Coronal, QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
         mCoronalView->setCrosshairImagePoint(coronalPoint);
     }
     if (mAxialView != nullptr) {
-        const QPointF axialPoint = mapPointThroughViewFlips(MPRViewType::Axial, QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
+        const QPointF axialPoint = mirrorPointForViewFlips(MPRViewType::Axial, QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
         mAxialView->setCrosshairImagePoint(axialPoint);
     }
 }
@@ -481,7 +485,7 @@ int MPRPage::imageMmToVoxelIndex(double valueMm, double spacing, int count) cons
     return std::clamp(index, 0, count - 1);
 }
 
-QPointF MPRPage::mapPointThroughViewFlips(MPRViewType viewType, const QPointF &imagePoint)
+QPointF MPRPage::mirrorPointForViewFlips(MPRViewType viewType, const QPointF &imagePoint)
 {
     const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
     MPRSliceState    *state      = stateForType(viewType);
