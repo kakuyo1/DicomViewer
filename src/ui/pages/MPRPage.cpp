@@ -164,16 +164,8 @@ void MPRPage::setRefreshEnabled(bool enabled)
 void MPRPage::setToolMode(SliceToolMode mode)
 {
     mToolMode = mode;
-    if (mSagittalView != nullptr) {
-        mSagittalView->setToolMode(mode);
-    }
-    if (mCoronalView != nullptr) {
-        mCoronalView->setToolMode(mode);
-    }
-    if (mAxialView != nullptr) {
-        mAxialView->setToolMode(mode);
-    }
-    updateCrosshairForAllViews(); // 非 crosshair 按钮立刻隐藏十字线
+    applyToolModeToViews(mode);
+    updateCrosshairForAllViews(); // 只有 crosshair 模式下才出现十字线
 }
 
 SliceToolMode MPRPage::toolMode() const
@@ -343,7 +335,7 @@ void MPRPage::updateAllViews()
     updateView(MPRViewType::Coronal);
     updateView(MPRViewType::Axial);
     // 再绘制十字线
-    setToolMode(mToolMode); // 内部包含只有选择 crosshair 工具时才刷新十字线的逻辑
+    updateCrosshairForAllViews(); // 非 crosshair 按钮立刻隐藏十字线
     updateOrientationMarkersForAllViews();
 }
 
@@ -635,4 +627,17 @@ int MPRPage::sliceCountForType(MPRViewType viewType) const
         return volumeData->depth;
     }
     return 0;
+}
+
+void MPRPage::applyToolModeToViews(SliceToolMode mode)
+{
+    if (mSagittalView != nullptr) {
+        mSagittalView->setToolMode(mode);
+    }
+    if (mCoronalView != nullptr) {
+        mCoronalView->setToolMode(mode);
+    }
+    if (mAxialView != nullptr) {
+        mAxialView->setToolMode(mode);
+    }
 }

@@ -66,6 +66,7 @@ private:
     MPRSliceState   *stateForType(MPRViewType viewType);
     SliceOrientation orientationForType(MPRViewType viewType) const;
     int              sliceCountForType(MPRViewType viewType) const;
+    void             applyToolModeToViews(SliceToolMode mode);
 
 private:
     ViewerSession *mViewerSession = nullptr;
