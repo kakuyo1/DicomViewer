@@ -222,6 +222,7 @@ void MPRPage::triggerFlipHorizontal()
     if (mAxialView != nullptr) {
         mAxialView->setFlipHorizontalEnabled(enabled);
     }
+    updateCrosshairForAllViews();
 }
 
 void MPRPage::triggerFlipVertical()
@@ -244,6 +245,7 @@ void MPRPage::triggerFlipVertical()
     if (mAxialView != nullptr) {
         mAxialView->setFlipVerticalEnabled(enabled);
     }
+    updateCrosshairForAllViews();
 }
 
 void MPRPage::resetView()
@@ -335,8 +337,7 @@ void MPRPage::updateAllViews()
     updateView(MPRViewType::Coronal);
     updateView(MPRViewType::Axial);
     // 再绘制十字线
-    updateCrosshairForAllViews();
-    setToolMode(mToolMode);
+    setToolMode(mToolMode); // 内部包含只有选择 crosshair 工具时才刷新十字线的逻辑
 }
 
 void MPRPage::updateView(MPRViewType viewType)
@@ -364,27 +365,18 @@ void MPRPage::updateView(MPRViewType viewType)
 
 void MPRPage::handleSliceScrollRequested(MPRViewType viewType, int steps)
 {
-    Q_UNUSED(viewType)
-
     if (steps == 0) {
         return;
     }
 
-    const int sagittalSliceCount = sliceCountForType(MPRViewType::Sagittal);
-    const int coronalSliceCount  = sliceCountForType(MPRViewType::Coronal);
-    const int axialSliceCount    = sliceCountForType(MPRViewType::Axial);
+    const int      SliceCount = sliceCountForType(viewType);
+    MPRSliceState *state      = stateForType(viewType);
 
-    if (sagittalSliceCount > 0) {
-        mSagittalState.sliceIndex = std::clamp(mSagittalState.sliceIndex + steps, 0, sagittalSliceCount - 1);
-    }
-    if (coronalSliceCount > 0) {
-        mCoronalState.sliceIndex = std::clamp(mCoronalState.sliceIndex + steps, 0, coronalSliceCount - 1);
-    }
-    if (axialSliceCount > 0) {
-        mAxialState.sliceIndex = std::clamp(mAxialState.sliceIndex + steps, 0, axialSliceCount - 1);
+    if (SliceCount > 0) {
+        state->sliceIndex = std::clamp(state->sliceIndex + steps, 0, SliceCount - 1);
     }
 
-    updateAllViews();
+    updateView(viewType);
 }
 
 void MPRPage::handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth)
@@ -411,15 +403,26 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
         return;
     }
 
+    // 如果视图被 flip 了，这个 imagePoint 是翻转后的显示坐标。
+    // 但 MPR 内部维护的 Crosshair 核心状态是未翻转的 volume 坐标：
+    // -- x = mSagittalState.sliceIndex
+    // -- y = mCoronalState.sliceIndex
+    // -- z = mAxialState.sliceIndex
+    // 所以这里要先把 点击点 反解回 未翻转坐标，然后再用它更新三维体素位置。（用当前显示 imagePoint 反解出来的原始平面坐标更新体素）
+    // 你不能用反转后的 imagePoint 去更新三维体素位置(x,y,z)! 因为虽然进行了翻转，但是你想要的点在三维体素中还是同一个
+    // 记住：更新体素坐标要用原始未翻转的平面坐标，更新十字线则在体素坐标投影后直接翻转。关键是找到那个不变的体素坐标
+    const QPointF unflippedPoint = mapPointThroughViewFlips(viewType, imagePoint);
+
+    // 更新三维体素位置
     if (viewType == MPRViewType::Axial) {
-        mSagittalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingX, volumeData->width);
-        mCoronalState.sliceIndex  = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingY, volumeData->height);
+        mSagittalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
+        mCoronalState.sliceIndex  = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingY, volumeData->height);
     } else if (viewType == MPRViewType::Coronal) {
-        mSagittalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingX, volumeData->width);
-        mAxialState.sliceIndex    = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingZ, volumeData->depth);
+        mSagittalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
+        mAxialState.sliceIndex    = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
     } else if (viewType == MPRViewType::Sagittal) {
-        mCoronalState.sliceIndex = imageMmToVoxelIndex(imagePoint.x(), volumeData->spacingY, volumeData->height);
-        mAxialState.sliceIndex   = imageMmToVoxelIndex(imagePoint.y(), volumeData->spacingZ, volumeData->depth);
+        mCoronalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingY, volumeData->height);
+        mAxialState.sliceIndex   = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
     }
 
     updateAllViews();
@@ -450,14 +453,20 @@ void MPRPage::updateCrosshairForAllViews()
     const int z = std::clamp(mAxialState.sliceIndex, 0, volumeData->depth - 1);
 
     // 绘制时，再把 `(x, y, z)` 投影回三个视图各自的 image point。
+    // 1.如果是 crosshair 状态下点击或者拖动：这里输入 map 的坐标是更新完后的体素坐标，但是这里是更新十字线，需要翻转一次。
+    // 2.如果是 单次点击 flipH/V, 则只是体素坐标投影后单纯翻转。
+    // 注意：这里的体素坐标是基于未翻转的原始平面坐标得到的！
     if (mSagittalView != nullptr) {
-        mSagittalView->setCrosshairImagePoint(QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
+        const QPointF sagittalPoint = mapPointThroughViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
+        mSagittalView->setCrosshairImagePoint(sagittalPoint);
     }
     if (mCoronalView != nullptr) {
-        mCoronalView->setCrosshairImagePoint(QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
+        const QPointF coronalPoint = mapPointThroughViewFlips(MPRViewType::Coronal, QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
+        mCoronalView->setCrosshairImagePoint(coronalPoint);
     }
     if (mAxialView != nullptr) {
-        mAxialView->setCrosshairImagePoint(QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
+        const QPointF axialPoint = mapPointThroughViewFlips(MPRViewType::Axial, QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
+        mAxialView->setCrosshairImagePoint(axialPoint);
     }
 }
 
@@ -470,6 +479,37 @@ int MPRPage::imageMmToVoxelIndex(double valueMm, double spacing, int count) cons
 
     const int index = static_cast<int>(std::lround(valueMm / spacing));
     return std::clamp(index, 0, count - 1);
+}
+
+QPointF MPRPage::mapPointThroughViewFlips(MPRViewType viewType, const QPointF &imagePoint)
+{
+    const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    MPRSliceState    *state      = stateForType(viewType);
+    if (volumeData == nullptr || !volumeData->isValid() || state == nullptr) {
+        return imagePoint;
+    }
+
+    double maxX = 0.0;
+    double maxY = 0.0;
+    if (viewType == MPRViewType::Axial) {
+        maxX = static_cast<double>(volumeData->width - 1) * volumeData->spacingX;
+        maxY = static_cast<double>(volumeData->height - 1) * volumeData->spacingY;
+    } else if (viewType == MPRViewType::Coronal) {
+        maxX = static_cast<double>(volumeData->width - 1) * volumeData->spacingX;
+        maxY = static_cast<double>(volumeData->depth - 1) * volumeData->spacingZ;
+    } else if (viewType == MPRViewType::Sagittal) {
+        maxX = static_cast<double>(volumeData->height - 1) * volumeData->spacingY;
+        maxY = static_cast<double>(volumeData->depth - 1) * volumeData->spacingZ;
+    }
+
+    QPointF mappedPoint = imagePoint;
+    if (state->flipHorizontal) {
+        mappedPoint.setX(maxX - mappedPoint.x());
+    }
+    if (state->flipVertical) {
+        mappedPoint.setY(maxY - mappedPoint.y());
+    }
+    return mappedPoint;
 }
 
 void MPRPage::setActiveView(MPRViewType viewType)

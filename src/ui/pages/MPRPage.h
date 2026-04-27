@@ -58,6 +58,7 @@ private:
     void             handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
     void             updateCrosshairForAllViews();
     int              imageMmToVoxelIndex(double valueMm, double spacing, int count) const;
+    QPointF          mapPointThroughViewFlips(MPRViewType viewType, const QPointF &imagePoint);
     void             setActiveView(MPRViewType viewType);
     SliceViewWidget *viewForType(MPRViewType viewType) const;
     MPRSliceState   *stateForType(MPRViewType viewType);
