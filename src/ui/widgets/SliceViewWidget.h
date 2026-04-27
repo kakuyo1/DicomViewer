@@ -45,6 +45,8 @@ public:
     void setFlipVerticalEnabled(bool enabled);
     void setCrosshairImagePoint(const QPointF &imagePoint);
     void clearCrosshair();
+    void setOrientationMarkers(const QString &left, const QString &right, const QString &top, const QString &bottom);
+    void clearOrientationMarkers();
     void resetViewState(bool renderImmediately = true);
 
 signals:

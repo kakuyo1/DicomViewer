@@ -585,6 +585,20 @@ void SliceViewWidget::clearCrosshair()
     update();
 }
 
+void SliceViewWidget::setOrientationMarkers(const QString &left, const QString &right, const QString &top, const QString &bottom)
+{
+    if (mImageOverlayWidget != nullptr) {
+        mImageOverlayWidget->setOrientationMarkers(left, right, top, bottom);
+    }
+}
+
+void SliceViewWidget::clearOrientationMarkers()
+{
+    if (mImageOverlayWidget != nullptr) {
+        mImageOverlayWidget->clearOrientationMarkers();
+    }
+}
+
 void SliceViewWidget::resetViewState(bool renderImmediately)
 {
     mInvertEnabled          = false;

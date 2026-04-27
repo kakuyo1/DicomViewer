@@ -7,7 +7,8 @@
 #include "core/model/volume/SliceOrientation.h"
 
 class QApplication;
-class DicomSliceInfo;
+struct DicomSliceInfo;
+struct DicomVector3;
 struct VolumeData;
 
 namespace util
@@ -49,4 +50,8 @@ int sliceCountForOrientation(const VolumeData &volumeData, SliceOrientation orie
 SlicePlaneGeometry sliceGeometryForOrientation(const VolumeData &volumeData, SliceOrientation orientation);
 
 QString orientationText(SliceOrientation orientation);
+
+QString patientDirectionLabel(const DicomVector3 &direction);
+
+DicomVector3 reversedDirection(const DicomVector3 &direction);
 } // namespace util

@@ -1,4 +1,5 @@
 #include "core/worker/volume/VolumeBuilder.h"
+#include "common/Util.h"
 
 #include <algorithm>
 #include <cmath>
@@ -70,7 +71,7 @@ double readSpacingComponent(DcmDataset *dataset, int componentIndex, double defa
         return defaultValue;
     }
 
-    bool ok = false;
+    bool         ok    = false;
     const double value = parts[componentIndex].toDouble(&ok);
     return ok ? value : defaultValue;
 }
@@ -78,6 +79,11 @@ double readSpacingComponent(DcmDataset *dataset, int componentIndex, double defa
 double dot(const DicomVector3 &lhs, const DicomVector3 &rhs)
 {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+
+DicomVector3 subtract(const DicomVector3 &lhs, const DicomVector3 &rhs)
+{
+    return DicomVector3{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
 /** @note 根据几何信息推导 Z 方向间距，而不是直接用 SliceThickness */
@@ -92,7 +98,7 @@ bool tryDeriveSpacingZFromGeometry(const DicomSeries &series, double *spacingZ, 
         return false;
     }
 
-    const DicomVector3 normal = firstSlice.sliceNormal;
+    const DicomVector3  normal = firstSlice.sliceNormal;
     std::vector<double> deltas;
     deltas.reserve(static_cast<std::size_t>(series.slices.size() - 1)); /** @note 层间距离候选值 */
 
@@ -105,7 +111,7 @@ bool tryDeriveSpacingZFromGeometry(const DicomSeries &series, double *spacingZ, 
         }
 
         const double currentProjection = dot(slice.imagePositionPatient, normal);
-        const double delta = std::abs(currentProjection - previousProjection);
+        const double delta             = std::abs(currentProjection - previousProjection);
         if (delta > 1e-6) { // 忽略极小值
             deltas.push_back(delta);
         }
@@ -119,9 +125,9 @@ bool tryDeriveSpacingZFromGeometry(const DicomSeries &series, double *spacingZ, 
     // 取中位数作为 spacingZ，不容易被单独几个异常的slice拉偏
     std::sort(deltas.begin(), deltas.end());
     const std::size_t middle = deltas.size() / 2;
-    const double median = (deltas.size() % 2 == 0)
-        ? 0.5 * (deltas[middle - 1] + deltas[middle])
-        : deltas[middle];
+    const double      median = (deltas.size() % 2 == 0)
+                                   ? 0.5 * (deltas[middle - 1] + deltas[middle])
+                                   : deltas[middle];
 
     if (median <= 0.0) {
         return false;
@@ -145,9 +151,9 @@ bool tryDeriveSpacingZFromGeometry(const DicomSeries &series, double *spacingZ, 
 
 std::optional<VolumeData> VolumeBuilder::build(
     const DicomSeries &series,
-    QString *errorMessage,
-    QStringList *warnings,
-    QString *buildSummary) const
+    QString           *errorMessage,
+    QStringList       *warnings,
+    QString           *buildSummary) const
 {
     if (series.slices.isEmpty()) {
         if (errorMessage != nullptr) {
@@ -163,8 +169,8 @@ std::optional<VolumeData> VolumeBuilder::build(
     volumeData.depth             = series.slices.size();
 
     QStringList localWarnings;
-    double derivedSpacingZ = 1.0;
-    const bool hasGeometrySpacing = tryDeriveSpacingZFromGeometry(series, &derivedSpacingZ, &localWarnings);
+    double      derivedSpacingZ    = 1.0;
+    const bool  hasGeometrySpacing = tryDeriveSpacingZFromGeometry(series, &derivedSpacingZ, &localWarnings);
 
     int expectedPixelCount = -1;
 
@@ -192,10 +198,7 @@ std::optional<VolumeData> VolumeBuilder::build(
         Uint16 bitsAllocated       = 0;
         Uint16 pixelRepresentation = 0;
 
-        if (!dataset->findAndGetUint16(DCM_Rows, rows).good()
-            || !dataset->findAndGetUint16(DCM_Columns, columns).good()
-            || !dataset->findAndGetUint16(DCM_BitsAllocated, bitsAllocated).good()
-            || !dataset->findAndGetUint16(DCM_PixelRepresentation, pixelRepresentation).good()) {
+        if (!dataset->findAndGetUint16(DCM_Rows, rows).good() || !dataset->findAndGetUint16(DCM_Columns, columns).good() || !dataset->findAndGetUint16(DCM_BitsAllocated, bitsAllocated).good() || !dataset->findAndGetUint16(DCM_PixelRepresentation, pixelRepresentation).good()) {
             if (errorMessage != nullptr) {
                 *errorMessage = QStringLiteral("Missing required pixel metadata: %1").arg(slice.filePath);
             }
@@ -219,14 +222,14 @@ std::optional<VolumeData> VolumeBuilder::build(
 
         /** @note 根据第一张slice提前reserve */
         if (sliceIndex == 0) {
-            volumeData.width                        = static_cast<int>(columns);
-            volumeData.height                       = static_cast<int>(rows);
-            volumeData.spacingX                     = readSpacingComponent(dataset, 1, 1.0);
-            volumeData.spacingY                     = readSpacingComponent(dataset, 0, 1.0);
-            volumeData.windowCenter                 = readFloat64Value(dataset, DCM_WindowCenter    , 0.0);
-            volumeData.windowWidth                  = readFloat64Value(dataset, DCM_WindowWidth     , 0.0);
-            volumeData.rescaleSlope                 = readFloat64Value(dataset, DCM_RescaleSlope    , 1.0);
-            volumeData.rescaleIntercept             = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
+            volumeData.width            = static_cast<int>(columns);
+            volumeData.height           = static_cast<int>(rows);
+            volumeData.spacingX         = readSpacingComponent(dataset, 1, 1.0);
+            volumeData.spacingY         = readSpacingComponent(dataset, 0, 1.0);
+            volumeData.windowCenter     = readFloat64Value(dataset, DCM_WindowCenter, 0.0);
+            volumeData.windowWidth      = readFloat64Value(dataset, DCM_WindowWidth, 0.0);
+            volumeData.rescaleSlope     = readFloat64Value(dataset, DCM_RescaleSlope, 1.0);
+            volumeData.rescaleIntercept = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
 
             Sint16 rawPaddingValue = 0;
             if (readStoredPixelValue(dataset, DCM_PixelPaddingValue, pixelRepresentation, &rawPaddingValue)) {
@@ -243,18 +246,28 @@ std::optional<VolumeData> VolumeBuilder::build(
             }
 
             if (hasGeometrySpacing) { // 优先采用几何信息推导的spacingZ
-                volumeData.spacingZ = derivedSpacingZ;
+                volumeData.spacingZ                     = derivedSpacingZ;
                 volumeData.usedSliceThicknessAsSpacingZ = false;
-                volumeData.spacingZSource = QStringLiteral("ImagePositionPatientProjectedDelta");
+                volumeData.spacingZSource               = QStringLiteral("ImagePositionPatientProjectedDelta");
             } else if (slice.hasSliceThickness) { // 回退到使用sliceThickness作为spacingZ
-                volumeData.spacingZ = slice.sliceThickness;
+                volumeData.spacingZ                     = slice.sliceThickness;
                 volumeData.usedSliceThicknessAsSpacingZ = true;
-                volumeData.spacingZSource = QStringLiteral("SliceThicknessFallback");
+                volumeData.spacingZSource               = QStringLiteral("SliceThicknessFallback");
             } else { // 最糟糕的情况
-                volumeData.spacingZ = 1.0;
+                volumeData.spacingZ                     = 1.0;
                 volumeData.usedSliceThicknessAsSpacingZ = false;
-                volumeData.spacingZSource = QStringLiteral("DefaultFallback");
+                volumeData.spacingZSource               = QStringLiteral("DefaultFallback");
                 localWarnings.push_back(QStringLiteral("Could not derive spacingZ from geometry or SliceThickness; defaulted to 1.0."));
+            }
+
+            // 保存 VolumeData patient orientation
+            const DicomSliceInfo &lastSlice = series.slices.back();
+            if (series.hasGeometryHints && slice.hasImageOrientationPatient && slice.hasSliceNormal && slice.hasImagePositionPatient && lastSlice.hasImagePositionPatient) {
+                const DicomVector3 sliceDirection = subtract(lastSlice.imagePositionPatient, slice.imagePositionPatient);
+                volumeData.volumeXDirection       = slice.rowDirection;
+                volumeData.volumeYDirection       = slice.columnDirection;
+                volumeData.volumeZDirection       = (dot(sliceDirection, slice.sliceNormal) >= 0.0) ? slice.sliceNormal : util::reversedDirection(slice.sliceNormal);
+                volumeData.hasPatientOrientation  = true;
             }
 
             expectedPixelCount = pixelCount;
@@ -270,9 +283,7 @@ std::optional<VolumeData> VolumeBuilder::build(
                 localWarnings.push_back(QStringLiteral("PixelPaddingRangeLimit is present without PixelPaddingValue; padding suppression is disabled."));
                 volumeData.hasPixelPaddingRangeLimit = false;
             }
-        } else if (volumeData.width != static_cast<int>(columns)
-                   || volumeData.height != static_cast<int>(rows)
-                   || expectedPixelCount != pixelCount) {
+        } else if (volumeData.width != static_cast<int>(columns) || volumeData.height != static_cast<int>(rows) || expectedPixelCount != pixelCount) {
             if (errorMessage != nullptr) {
                 *errorMessage = QStringLiteral("Inconsistent slice dimensions in series.");
             }
@@ -280,7 +291,7 @@ std::optional<VolumeData> VolumeBuilder::build(
         }
 
         /** @note HU = rawPixel * RescaleSlope + RescaleIntercept */
-        const double rescaleSlope     = readFloat64Value(dataset, DCM_RescaleSlope    , 1.0);
+        const double rescaleSlope     = readFloat64Value(dataset, DCM_RescaleSlope, 1.0);
         const double rescaleIntercept = readFloat64Value(dataset, DCM_RescaleIntercept, 0.0);
 
         if (sliceIndex > 0 && (rescaleSlope != volumeData.rescaleSlope || rescaleIntercept != volumeData.rescaleIntercept)) {
@@ -299,9 +310,8 @@ std::optional<VolumeData> VolumeBuilder::build(
          *      - 再按 Sint16 解释
          */
         unsigned long valueCount = 0;
-        const Uint16 *pixelData = nullptr;
-        if (!dataset->findAndGetUint16Array(DCM_PixelData, pixelData, &valueCount).good() || pixelData == nullptr
-            || static_cast<int>(valueCount) < pixelCount) {
+        const Uint16 *pixelData  = nullptr;
+        if (!dataset->findAndGetUint16Array(DCM_PixelData, pixelData, &valueCount).good() || pixelData == nullptr || static_cast<int>(valueCount) < pixelCount) {
             if (errorMessage != nullptr) {
                 *errorMessage = QStringLiteral("Failed to read 16-bit pixel data: %1").arg(slice.filePath);
             }
@@ -313,8 +323,8 @@ std::optional<VolumeData> VolumeBuilder::build(
             if (pixelRepresentation == 0) {
                 rawValue = static_cast<double>(pixelData[i]);
             } else {
-                Sint16 signedValue = 0;
-                const Uint16 rawWord = pixelData[i];
+                Sint16       signedValue = 0;
+                const Uint16 rawWord     = pixelData[i];
                 std::memcpy(&signedValue, &rawWord, sizeof(Sint16));
                 rawValue = static_cast<double>(signedValue);
             }
@@ -333,7 +343,7 @@ std::optional<VolumeData> VolumeBuilder::build(
     }
 
     volumeData.geometrySummary = QStringLiteral(
-        "sort=%1; spacingZ source=%2; geometry hints=%3")
+                                     "sort=%1; spacingZ source=%2; geometry hints=%3")
                                      .arg(
                                          series.sortStrategySummary.isEmpty()
                                              ? QStringLiteral("unknown")
@@ -349,7 +359,7 @@ std::optional<VolumeData> VolumeBuilder::build(
 
     if (buildSummary != nullptr) {
         *buildSummary = QStringLiteral(
-            "%1 x %2 x %3, spacing=(%4, %5, %6), WW/WL=(%7, %8), rescale=(%9, %10)")
+                            "%1 x %2 x %3, spacing=(%4, %5, %6), WW/WL=(%7, %8), rescale=(%9, %10)")
                             .arg(volumeData.width)
                             .arg(volumeData.height)
                             .arg(volumeData.depth)

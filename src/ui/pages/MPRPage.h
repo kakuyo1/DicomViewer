@@ -57,6 +57,8 @@ private:
     void             handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth);
     void             handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
     void             updateCrosshairForAllViews();
+    void             updateOrientationMarkersForAllViews();
+    void             updateOrientationMarkersForView(MPRViewType viewType);
     int              imageMmToVoxelIndex(double valueMm, double spacing, int count) const;
     QPointF          mirrorPointForViewFlips(MPRViewType viewType, const QPointF &imagePoint);
     void             setActiveView(MPRViewType viewType);

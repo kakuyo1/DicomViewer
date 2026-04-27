@@ -10,6 +10,7 @@
 #include <QIODevice>
 #include <QStringList>
 
+#include <cmath>
 #include <string>
 
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -202,6 +203,26 @@ QString orientationText(SliceOrientation orientation)
         return QStringLiteral("Sagittal");
     }
     return QStringLiteral("Unknown");
+}
+
+QString patientDirectionLabel(const DicomVector3 &direction)
+{
+    const double absX = std::abs(direction.x);
+    const double absY = std::abs(direction.y);
+    const double absZ = std::abs(direction.z);
+
+    if (absX >= absY && absX >= absZ) { // X 占主导，同时预防斜切，虽然项目暂时没有
+        return direction.x >= 0.0 ? QStringLiteral("L") : QStringLiteral("R");
+    }
+    if (absY >= absX && absY >= absZ) {
+        return direction.y >= 0.0 ? QStringLiteral("P") : QStringLiteral("A");
+    }
+    return direction.z >= 0.0 ? QStringLiteral("S") : QStringLiteral("I");
+}
+
+DicomVector3 reversedDirection(const DicomVector3 &direction)
+{
+    return DicomVector3{-direction.x, -direction.y, -direction.z};
 }
 
 } // namespace util

@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
+#include "common/Util.h"
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
 #include "services/state/ViewerSession.h"
@@ -223,6 +224,7 @@ void MPRPage::triggerFlipHorizontal()
         mAxialView->setFlipHorizontalEnabled(enabled);
     }
     updateCrosshairForAllViews();
+    updateOrientationMarkersForAllViews();
 }
 
 void MPRPage::triggerFlipVertical()
@@ -246,6 +248,7 @@ void MPRPage::triggerFlipVertical()
         mAxialView->setFlipVerticalEnabled(enabled);
     }
     updateCrosshairForAllViews();
+    updateOrientationMarkersForAllViews();
 }
 
 void MPRPage::resetView()
@@ -289,14 +292,17 @@ void MPRPage::clearDisplay()
     if (mSagittalView != nullptr) {
         mSagittalView->clearDisplay();
         mSagittalView->clearCrosshair();
+        mSagittalView->clearOrientationMarkers();
     }
     if (mCoronalView != nullptr) {
         mCoronalView->clearDisplay();
         mCoronalView->clearCrosshair();
+        mCoronalView->clearOrientationMarkers();
     }
     if (mAxialView != nullptr) {
         mAxialView->clearDisplay();
         mAxialView->clearCrosshair();
+        mAxialView->clearOrientationMarkers();
     }
 }
 
@@ -338,6 +344,7 @@ void MPRPage::updateAllViews()
     updateView(MPRViewType::Axial);
     // 再绘制十字线
     setToolMode(mToolMode); // 内部包含只有选择 crosshair 工具时才刷新十字线的逻辑
+    updateOrientationMarkersForAllViews();
 }
 
 void MPRPage::updateView(MPRViewType viewType)
@@ -472,6 +479,53 @@ void MPRPage::updateCrosshairForAllViews()
         const QPointF axialPoint = mirrorPointForViewFlips(MPRViewType::Axial, QPointF(x * volumeData->spacingX, y * volumeData->spacingY));
         mAxialView->setCrosshairImagePoint(axialPoint);
     }
+}
+
+void MPRPage::updateOrientationMarkersForAllViews()
+{
+    updateOrientationMarkersForView(MPRViewType::Sagittal);
+    updateOrientationMarkersForView(MPRViewType::Coronal);
+    updateOrientationMarkersForView(MPRViewType::Axial);
+}
+
+void MPRPage::updateOrientationMarkersForView(MPRViewType viewType)
+{
+    const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    SliceViewWidget  *view       = viewForType(viewType);
+    MPRSliceState    *state      = stateForType(viewType);
+    if (view == nullptr) {
+        return;
+    }
+    if (volumeData == nullptr || !volumeData->isValid() || !volumeData->hasPatientOrientation || state == nullptr) {
+        view->clearOrientationMarkers();
+        return;
+    }
+
+    DicomVector3 screenRight;
+    DicomVector3 screenDown;
+    if (viewType == MPRViewType::Axial) {
+        screenRight = volumeData->volumeXDirection;
+        screenDown  = volumeData->volumeYDirection;
+    } else if (viewType == MPRViewType::Coronal) {
+        screenRight = volumeData->volumeXDirection;
+        screenDown  = volumeData->volumeZDirection;
+    } else if (viewType == MPRViewType::Sagittal) {
+        screenRight = volumeData->volumeYDirection;
+        screenDown  = volumeData->volumeZDirection;
+    }
+
+    if (state->flipHorizontal) {
+        screenRight = util::reversedDirection(screenRight);
+    }
+    if (state->flipVertical) {
+        screenDown = util::reversedDirection(screenDown);
+    }
+
+    view->setOrientationMarkers(
+        util::patientDirectionLabel(util::reversedDirection(screenRight)),
+        util::patientDirectionLabel(screenRight),
+        util::patientDirectionLabel(util::reversedDirection(screenDown)),
+        util::patientDirectionLabel(screenDown));
 }
 
 // 从 image 坐标转体素 index 时，使用 `std::lround`，再 clamp 到合法范围。
