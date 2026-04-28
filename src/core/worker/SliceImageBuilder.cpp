@@ -202,6 +202,9 @@ QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientatio
             }
             if (orientation == SliceOrientation::Coronal) {
                 // Qt 中默认 y 增长的方向(向下)会导致 volumeZ 增大的方向也沿屏幕向下，造成默认情况 I 在上，S 在下，故翻转适应主流
+                // 这个问题只出现在 Coronal/Sagittal 需要把 volumeZ 放到屏幕竖直方向时。
+                // 采样时直接用反向的 volumeZ 映射生成图像
+                // 屏幕向下方向 = volumeZ 增大方向 -> 屏幕向上方向 = volumeZ 增大方向
                 const int volumeZ = volumeData.depth - 1 - y;
                 return voxelAt(volumeData, x, sliceIndex, volumeZ);
             }

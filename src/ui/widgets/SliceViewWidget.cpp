@@ -497,6 +497,10 @@ void SliceViewWidget::mouseReleaseEvent(QMouseEvent *event)
 
     if (event->button() == Qt::LeftButton && mCrosshairDragging) {
         mCrosshairDragging = false;
+        QPointF imagePoint;
+        if (widgetPointToImagePoint(event->pos(), &imagePoint)) {
+            emit imagePointReleased(imagePoint);
+        }
         event->accept();
         return;
     }
@@ -533,6 +537,7 @@ void SliceViewWidget::setToolMode(SliceToolMode mode)
     mToolMode            = mode;
     mMouseDragActive     = false;
     mMeasurementDragging = false;
+    mCrosshairDragging   = false;
 }
 
 void SliceViewWidget::setWindowLevel(double windowCenter, double windowWidth)

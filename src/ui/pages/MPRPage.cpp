@@ -16,6 +16,10 @@
 MPRPage::MPRPage(QWidget *parent)
     : QWidget(parent)
 {
+    mCrosshairDragUpdateTimer.setInterval(16);
+    mCrosshairDragUpdateTimer.setTimerType(Qt::PreciseTimer);
+    connect(&mCrosshairDragUpdateTimer, &QTimer::timeout, this, &MPRPage::flushPendingCrosshairPointChanged);
+
     setupUi();
 }
 
@@ -91,13 +95,27 @@ void MPRPage::setupUi()
 
     // Crosshair 功能下鼠标拖动
     connect(mSagittalView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
-        handleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
+        scheduleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
     });
     connect(mCoronalView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
-        handleCrosshairPointChanged(MPRViewType::Coronal, imagePoint);
+        scheduleCrosshairPointChanged(MPRViewType::Coronal, imagePoint);
     });
     connect(mAxialView, &SliceViewWidget::imagePointDragged, this, [this](const QPointF &imagePoint) {
-        handleCrosshairPointChanged(MPRViewType::Axial, imagePoint);
+        scheduleCrosshairPointChanged(MPRViewType::Axial, imagePoint);
+    });
+
+    // Crosshair 功能下鼠标松开，立即应用最后一个位置，避免最终点等待下一次 timer。
+    connect(mSagittalView, &SliceViewWidget::imagePointReleased, this, [this](const QPointF &imagePoint) {
+        scheduleCrosshairPointChanged(MPRViewType::Sagittal, imagePoint);
+        flushPendingCrosshairPointChanged();
+    });
+    connect(mCoronalView, &SliceViewWidget::imagePointReleased, this, [this](const QPointF &imagePoint) {
+        scheduleCrosshairPointChanged(MPRViewType::Coronal, imagePoint);
+        flushPendingCrosshairPointChanged();
+    });
+    connect(mAxialView, &SliceViewWidget::imagePointReleased, this, [this](const QPointF &imagePoint) {
+        scheduleCrosshairPointChanged(MPRViewType::Axial, imagePoint);
+        flushPendingCrosshairPointChanged();
     });
 
     setActiveView(MPRViewType::Axial);
@@ -163,6 +181,11 @@ void MPRPage::setRefreshEnabled(bool enabled)
 
 void MPRPage::setToolMode(SliceToolMode mode)
 {
+    if (mode != SliceToolMode::Crosshair) {
+        mCrosshairPointPending = false;
+        mCrosshairDragUpdateTimer.stop();
+    }
+
     mToolMode = mode;
     applyToolModeToViews(mode);
     updateCrosshairForAllViews(); // 只有 crosshair 模式下才出现十字线
@@ -399,6 +422,36 @@ void MPRPage::handleWindowLevelEdited(MPRViewType viewType, double windowCenter,
     }
 }
 
+// Crosshair 拖动时不再每个 mouse move 立即更新，只缓存最新点
+void MPRPage::scheduleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint)
+{
+    mPendingCrosshairViewType   = viewType;
+    mPendingCrosshairImagePoint = imagePoint;
+    mCrosshairPointPending      = true;
+
+    if (!mCrosshairDragUpdateTimer.isActive()) {
+        mCrosshairDragUpdateTimer.start();
+    }
+}
+
+// Timer 到点后应用最新点
+// 鼠标松开时 imagePointReleased(...) 信号，并立即 flush 最后位置，避免最终点延迟。
+// 因为鼠标松开一定发生在拖动之后，要么定时器未到时间 mCrosshairPointPending 此时为 true，通过 release 触发进行刷新
+// 要么定时器已经触发刷新完最终帧，此时 release 触发直接 return
+void MPRPage::flushPendingCrosshairPointChanged()
+{
+    if (!mCrosshairPointPending) {
+        mCrosshairDragUpdateTimer.stop();
+        return;
+    }
+
+    const MPRViewType viewType   = mPendingCrosshairViewType;
+    const QPointF     imagePoint = mPendingCrosshairImagePoint;
+    mCrosshairPointPending       = false;
+
+    handleCrosshairPointChanged(viewType, imagePoint);
+}
+
 void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint)
 {
     const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
@@ -438,6 +491,11 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
         const int sagittalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
         const int displayZIndex      = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
         // Qt 中默认 y 增长的方向(向下)会导致 volumeZ 增大的方向也沿屏幕向下，造成默认情况 I 在上，S 在下，故翻转适应主流
+        // displayZIndex 是“屏幕上的第几行对应的 z 距离”
+        // axialSliceIndex 才是真正的 volume z index
+        // 图像显示已经改成：
+        // 屏幕 y 越大 -> z index 越小
+        // 点击映射也必须反过来。
         const int axialSliceIndex = volumeData->depth - 1 - displayZIndex;
         sagittalChanged           = updateSliceIndexIfChanged(mSagittalState, sagittalSliceIndex);
         axialChanged              = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
@@ -489,6 +547,10 @@ void MPRPage::updateCrosshairForAllViews()
     // 1.如果是 crosshair 状态下点击或者拖动：这里输入 map 的坐标是更新完后的体素坐标，但是这里是更新十字线，需要翻转一次。
     // 2.如果是 单次点击 flipH/V, 则只是体素坐标投影后单纯翻转。
     // 注意：这里的体素坐标是基于未翻转的原始平面坐标得到的！
+
+    // 为什么要翻转一下 z ：Crosshair 是这样算的，当前 volume 坐标 x/y/z -> 算出它应该画在屏幕哪里（Qt）
+    // 新逻辑：volumeZ 越大，图像内容越靠上/即图像平面 y 越大（这与 Qt 的y方向是相反的）
+    // 本质原因就是 Qt屏幕screenY 与 volumeZ之间的不兼容，handleCrosshairPointChanged内同理。
     const double displayedZ = static_cast<double>(volumeData->depth - 1 - z) * volumeData->spacingZ;
     if (mSagittalView != nullptr) {
         const QPointF sagittalPoint = mirrorPointForViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, displayedZ));

@@ -53,6 +53,7 @@ signals:
     void activated();
     void imagePointPressed(const QPointF &imagePoint);
     void imagePointDragged(const QPointF &imagePoint);
+    void imagePointReleased(const QPointF &imagePoint);
     void sliceScrollRequested(int steps);
     void windowLevelEdited(double windowCenter, double windowWidth);
     void displayParametersChanged(double windowCenter,

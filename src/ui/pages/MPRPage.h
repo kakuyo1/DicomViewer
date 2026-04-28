@@ -2,6 +2,7 @@
 
 #include <QPointF>
 #include <QString>
+#include <QTimer>
 #include <QWidget>
 
 #include "core/model/volume/SliceOrientation.h"
@@ -55,6 +56,8 @@ private:
     void             updateView(MPRViewType viewType);
     void             handleSliceScrollRequested(MPRViewType viewType, int steps);
     void             handleWindowLevelEdited(MPRViewType viewType, double windowCenter, double windowWidth);
+    void             scheduleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
+    void             flushPendingCrosshairPointChanged();
     void             handleCrosshairPointChanged(MPRViewType viewType, const QPointF &imagePoint);
     void             updateCrosshairForAllViews();
     void             updateOrientationMarkersForAllViews();
@@ -85,4 +88,9 @@ private:
     MPRSliceState mSagittalState;
     MPRSliceState mCoronalState;
     MPRSliceState mAxialState;
+
+    QTimer      mCrosshairDragUpdateTimer;
+    bool        mCrosshairPointPending      = false;
+    MPRViewType mPendingCrosshairViewType   = MPRViewType::Axial;
+    QPointF     mPendingCrosshairImagePoint;
 };
