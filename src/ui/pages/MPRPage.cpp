@@ -436,12 +436,15 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
         coronalChanged               = updateSliceIndexIfChanged(mCoronalState, coronalSliceIndex);
     } else if (viewType == MPRViewType::Coronal) {
         const int sagittalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
-        const int axialSliceIndex    = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
-        sagittalChanged              = updateSliceIndexIfChanged(mSagittalState, sagittalSliceIndex);
-        axialChanged                 = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
+        const int displayZIndex      = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        // Qt 中默认 y 增长的方向(向下)会导致 volumeZ 增大的方向也沿屏幕向下，造成默认情况 I 在上，S 在下，故翻转适应主流
+        const int axialSliceIndex = volumeData->depth - 1 - displayZIndex;
+        sagittalChanged           = updateSliceIndexIfChanged(mSagittalState, sagittalSliceIndex);
+        axialChanged              = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
     } else if (viewType == MPRViewType::Sagittal) {
         const int coronalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingY, volumeData->height);
-        const int axialSliceIndex   = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        const int displayZIndex     = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        const int axialSliceIndex   = volumeData->depth - 1 - displayZIndex;
         coronalChanged              = updateSliceIndexIfChanged(mCoronalState, coronalSliceIndex);
         axialChanged                = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
     }
@@ -486,12 +489,13 @@ void MPRPage::updateCrosshairForAllViews()
     // 1.如果是 crosshair 状态下点击或者拖动：这里输入 map 的坐标是更新完后的体素坐标，但是这里是更新十字线，需要翻转一次。
     // 2.如果是 单次点击 flipH/V, 则只是体素坐标投影后单纯翻转。
     // 注意：这里的体素坐标是基于未翻转的原始平面坐标得到的！
+    const double displayedZ = static_cast<double>(volumeData->depth - 1 - z) * volumeData->spacingZ;
     if (mSagittalView != nullptr) {
-        const QPointF sagittalPoint = mirrorPointForViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, z * volumeData->spacingZ));
+        const QPointF sagittalPoint = mirrorPointForViewFlips(MPRViewType::Sagittal, QPointF(y * volumeData->spacingY, displayedZ));
         mSagittalView->setCrosshairImagePoint(sagittalPoint);
     }
     if (mCoronalView != nullptr) {
-        const QPointF coronalPoint = mirrorPointForViewFlips(MPRViewType::Coronal, QPointF(x * volumeData->spacingX, z * volumeData->spacingZ));
+        const QPointF coronalPoint = mirrorPointForViewFlips(MPRViewType::Coronal, QPointF(x * volumeData->spacingX, displayedZ));
         mCoronalView->setCrosshairImagePoint(coronalPoint);
     }
     if (mAxialView != nullptr) {
@@ -527,10 +531,11 @@ void MPRPage::updateOrientationMarkersForView(MPRViewType viewType)
         screenDown  = volumeData->volumeYDirection;
     } else if (viewType == MPRViewType::Coronal) {
         screenRight = volumeData->volumeXDirection;
-        screenDown  = volumeData->volumeZDirection;
+        // Qt 中默认 y 增长的方向(向下)会导致 volumeZ 增大的方向也沿屏幕向下，造成默认情况 I 在上，S 在下，故翻转适应主流
+        screenDown = util::reversedDirection(volumeData->volumeZDirection);
     } else if (viewType == MPRViewType::Sagittal) {
         screenRight = volumeData->volumeYDirection;
-        screenDown  = volumeData->volumeZDirection;
+        screenDown  = util::reversedDirection(volumeData->volumeZDirection);
     }
 
     if (state->flipHorizontal) {

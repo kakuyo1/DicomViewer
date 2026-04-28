@@ -189,7 +189,7 @@ QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientatio
         return {};
     }
 
-    // 都是沿 volumeZ 从上到下
+    // Coronal/Sagittal 默认让 volumeZ 增大方向朝屏幕上方，匹配常见 MPR 的 S-up / I-down 显示。
     // Coronal  = 从每张 volumeZ 层里抽同一个 volumeY 行，拼成 XZ 面
     // Sagittal = 从每张 volumeZ 层里抽同一个 volumeX 列，拼成 YZ 面
     return buildSliceImageInternal(
@@ -201,10 +201,13 @@ QImage buildSliceImage(const VolumeData &volumeData, SliceOrientation orientatio
                 return voxelAt(volumeData, x, y, sliceIndex);
             }
             if (orientation == SliceOrientation::Coronal) {
-                return voxelAt(volumeData, x, sliceIndex, y);
+                // Qt 中默认 y 增长的方向(向下)会导致 volumeZ 增大的方向也沿屏幕向下，造成默认情况 I 在上，S 在下，故翻转适应主流
+                const int volumeZ = volumeData.depth - 1 - y;
+                return voxelAt(volumeData, x, sliceIndex, volumeZ);
             }
             if (orientation == SliceOrientation::Sagittal) {
-                return voxelAt(volumeData, sliceIndex, x, y);
+                const int volumeZ = volumeData.depth - 1 - y;
+                return voxelAt(volumeData, sliceIndex, x, volumeZ);
             }
             return voxelAt(volumeData, x, y, sliceIndex);
         },
