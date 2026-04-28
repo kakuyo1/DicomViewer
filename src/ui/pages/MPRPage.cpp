@@ -416,19 +416,46 @@ void MPRPage::handleCrosshairPointChanged(MPRViewType viewType, const QPointF &i
     // 记住：更新体素坐标要用原始未翻转的平面坐标，更新十字线则在体素坐标投影后直接翻转。关键是找到那个不变的体素坐标
     const QPointF unflippedPoint = mirrorPointForViewFlips(viewType, imagePoint);
 
-    // 更新三维体素位置
+    bool sagittalChanged = false;
+    bool coronalChanged  = false;
+    bool axialChanged    = false;
+
+    const auto updateSliceIndexIfChanged = [](MPRSliceState &state, int sliceIndex) {
+        if (state.sliceIndex == sliceIndex) { // 旧 - 新
+            return false;
+        }
+        state.sliceIndex = sliceIndex;
+        return true;
+    };
+
+    // 更新三维体素位置，只重建 sliceIndex 实际变化的视图。
     if (viewType == MPRViewType::Axial) {
-        mSagittalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
-        mCoronalState.sliceIndex  = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingY, volumeData->height);
+        const int sagittalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
+        const int coronalSliceIndex  = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingY, volumeData->height);
+        sagittalChanged              = updateSliceIndexIfChanged(mSagittalState, sagittalSliceIndex);
+        coronalChanged               = updateSliceIndexIfChanged(mCoronalState, coronalSliceIndex);
     } else if (viewType == MPRViewType::Coronal) {
-        mSagittalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
-        mAxialState.sliceIndex    = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        const int sagittalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingX, volumeData->width);
+        const int axialSliceIndex    = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        sagittalChanged              = updateSliceIndexIfChanged(mSagittalState, sagittalSliceIndex);
+        axialChanged                 = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
     } else if (viewType == MPRViewType::Sagittal) {
-        mCoronalState.sliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingY, volumeData->height);
-        mAxialState.sliceIndex   = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        const int coronalSliceIndex = imageMmToVoxelIndex(unflippedPoint.x(), volumeData->spacingY, volumeData->height);
+        const int axialSliceIndex   = imageMmToVoxelIndex(unflippedPoint.y(), volumeData->spacingZ, volumeData->depth);
+        coronalChanged              = updateSliceIndexIfChanged(mCoronalState, coronalSliceIndex);
+        axialChanged                = updateSliceIndexIfChanged(mAxialState, axialSliceIndex);
     }
 
-    updateAllViews();
+    if (sagittalChanged) {
+        updateView(MPRViewType::Sagittal);
+    }
+    if (coronalChanged) {
+        updateView(MPRViewType::Coronal);
+    }
+    if (axialChanged) {
+        updateView(MPRViewType::Axial);
+    }
+    updateCrosshairForAllViews();
 }
 
 void MPRPage::updateCrosshairForAllViews()
@@ -521,6 +548,17 @@ void MPRPage::updateOrientationMarkersForView(MPRViewType viewType)
 }
 
 // 从 image 坐标转体素 index 时，使用 `std::lround`，再 clamp 到合法范围。
+// e.g.
+// - spacing = 0.7mm
+// - 旧位置 = 7.0mm
+// - 旧 index = lround(7.0 / 0.7) = 10
+//
+// - 鼠标移动 0.2mm
+// - 新位置 = 7.2mm
+// - 新 index = lround(7.2 / 0.7) = lround(10.2857) = 10
+// 所以：
+// state.sliceIndex == sliceIndex成立，updateSliceIndexIfChanged(...)
+// 返回 false，对应的 updateView(...) 不会执行。
 int MPRPage::imageMmToVoxelIndex(double valueMm, double spacing, int count) const
 {
     if (spacing <= 0.0 || count <= 0) {
