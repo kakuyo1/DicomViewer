@@ -4,6 +4,7 @@
 
 #include <QVBoxLayout>
 
+#include "common/Util.h"
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
 #include "services/state/ViewerSession.h"
@@ -106,6 +107,7 @@ void StackPage::toggleFlipHorizontal()
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->setFlipHorizontalEnabled(mFlipHorizontalEnabled);
     }
+    updateOrientationMarkers();
 }
 
 void StackPage::toggleFlipVertical()
@@ -114,6 +116,7 @@ void StackPage::toggleFlipVertical()
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->setFlipVerticalEnabled(mFlipVerticalEnabled);
     }
+    updateOrientationMarkers();
 }
 
 void StackPage::resetView()
@@ -143,6 +146,7 @@ void StackPage::refreshFromSession() /// 导入成功初始化切片
     /** @note 默认选择中间的切片展示，比较符合用户习惯 */
     mCurrentSliceIndex = volumeData->depth / 2;
     updateDisplayedSlice();
+    updateOrientationMarkers();
 }
 
 void StackPage::updateDisplayedSlice()
@@ -194,4 +198,32 @@ void StackPage::clearDisplay()
     if (mSliceViewWidget != nullptr) {
         mSliceViewWidget->clearDisplay();
     }
+}
+
+void StackPage::updateOrientationMarkers()
+{
+    const VolumeData *volumeData = (mViewerSession != nullptr) ? mViewerSession->currentVolumeData() : nullptr;
+    if (mSliceViewWidget == nullptr) {
+        return;
+    }
+    if (volumeData == nullptr || !volumeData->isValid() || !volumeData->hasPatientOrientation) {
+        mSliceViewWidget->clearOrientationMarkers();
+        return;
+    }
+
+    DicomVector3 screenRight = volumeData->volumeXDirection;
+    DicomVector3 screenDown  = volumeData->volumeYDirection;
+
+    if (mFlipHorizontalEnabled) {
+        screenRight = util::reversedDirection(screenRight);
+    }
+    if (mFlipVerticalEnabled) {
+        screenDown = util::reversedDirection(screenDown);
+    }
+
+    mSliceViewWidget->setOrientationMarkers(
+        util::patientDirectionLabel(util::reversedDirection(screenRight)),
+        util::patientDirectionLabel(screenRight),
+        util::patientDirectionLabel(util::reversedDirection(screenDown)),
+        util::patientDirectionLabel(screenDown));
 }

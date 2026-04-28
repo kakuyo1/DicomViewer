@@ -38,6 +38,7 @@ private:
     void updateDisplayedSlice();
     void handleSliceScrollRequested(int steps);
     void clearDisplay();
+    void updateOrientationMarkers();
 
 private:
     ViewerSession   *mViewerSession     = nullptr;
