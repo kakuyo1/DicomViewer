@@ -1,5 +1,8 @@
 #include "services/controller/ImportController.h"
 
+#include <memory>
+#include <utility>
+
 #include <QFileDialog>
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -125,7 +128,7 @@ void ImportController::startVolumeBuild(const DicomSeries &selectedSeries)
         }
 
         result.success = true;
-        result.volumeData = *volumeData;
+        result.volumeData = std::make_shared<VolumeData>(std::move(*volumeData));
         return result;
     }));
 }

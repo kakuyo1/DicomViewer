@@ -48,6 +48,9 @@ void WorkSpaceWidget::setViewerSession(ViewerSession *viewerSession)
     if (mMPRPage != nullptr) {
         mMPRPage->setRefreshEnabled(mCurrentViewMode == ViewMode::MPR);
     }
+    if (mVRPage != nullptr) {
+        mVRPage->setRefreshEnabled(mCurrentViewMode == ViewMode::VR);
+    }
 }
 
 void WorkSpaceWidget::setViewMode(ViewMode mode)
@@ -72,11 +75,12 @@ void WorkSpaceWidget::setViewMode(ViewMode mode)
     mCurrentViewMode = mode;
     setCurrentWidget(targetPage);
 
-    // 延迟渲染 MPR 页面
-    // - 切换到 MPR 时启用 MPR 刷新。
-    // - 非 MPR 模式下禁用 MPR 自动刷新。
+    // 延迟渲染 MPR / VR 页面，避免导入后在隐藏页面做重渲染。
     if (mMPRPage != nullptr) {
         mMPRPage->setRefreshEnabled(mode == ViewMode::MPR);
+    }
+    if (mVRPage != nullptr) {
+        mVRPage->setRefreshEnabled(mode == ViewMode::VR);
     }
     emit currentViewModeChanged(mode);
 }

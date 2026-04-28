@@ -4,6 +4,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <memory>
+
 #include "core/model/dicom/DicomSeries.h"
 #include "core/model/volume/VolumeData.h"
 
@@ -24,7 +26,7 @@ struct SeriesScanResult
 struct VolumeBuildResult
 {
     bool success                     = false;
-    VolumeData volumeData;
+    std::shared_ptr<VolumeData> volumeData;
     QString errorMessage;
     QStringList warnings;
     QString buildSummary;

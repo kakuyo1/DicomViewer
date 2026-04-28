@@ -2,6 +2,7 @@
 
 #include <QObject>
 
+#include <memory>
 #include <optional>
 
 #include "services/model/ImportResult.h"
@@ -20,6 +21,7 @@ public:
     const DicomSeries       *currentSeries() const;
     const VolumeBuildResult *currentVolumeBuildResult() const;
     const VolumeData        *currentVolumeData() const;
+    std::shared_ptr<const VolumeData> currentVolumeDataShared() const;
 
     void setImportResult(const ImportResult &result);
     void clear();

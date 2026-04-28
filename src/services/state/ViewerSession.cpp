@@ -14,7 +14,8 @@ bool ViewerSession::hasVolumeData() const
 {
     return mCurrentImportResult.has_value()
         && mCurrentImportResult->volumeBuildResult.success
-        && mCurrentImportResult->volumeBuildResult.volumeData.isValid();
+        && mCurrentImportResult->volumeBuildResult.volumeData != nullptr
+        && mCurrentImportResult->volumeBuildResult.volumeData->isValid();
 }
 
 const ImportResult *ViewerSession::currentImportResult() const
@@ -43,11 +44,21 @@ const VolumeBuildResult *ViewerSession::currentVolumeBuildResult() const
 const VolumeData *ViewerSession::currentVolumeData() const
 {
     const VolumeBuildResult *buildResult = currentVolumeBuildResult();
-    if (buildResult == nullptr || !buildResult->success || !buildResult->volumeData.isValid()) {
+    if (buildResult == nullptr || !buildResult->success || buildResult->volumeData == nullptr || !buildResult->volumeData->isValid()) {
         return nullptr;
     }
 
-    return &buildResult->volumeData;
+    return buildResult->volumeData.get();
+}
+
+std::shared_ptr<const VolumeData> ViewerSession::currentVolumeDataShared() const
+{
+    const VolumeBuildResult *buildResult = currentVolumeBuildResult();
+    if (buildResult == nullptr || !buildResult->success || buildResult->volumeData == nullptr || !buildResult->volumeData->isValid()) {
+        return nullptr;
+    }
+
+    return buildResult->volumeData;
 }
 
 void ViewerSession::setImportResult(const ImportResult &result)

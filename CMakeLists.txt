@@ -15,6 +15,8 @@ find_package(VTK CONFIG REQUIRED COMPONENTS
     InteractionStyle
     RenderingCore
     RenderingOpenGL2
+    RenderingVolume
+    RenderingVolumeOpenGL2
     GUISupportQt
 )
 
@@ -52,5 +54,12 @@ target_link_libraries(DicomViewer
         VTK::InteractionStyle
         VTK::RenderingCore
         VTK::RenderingOpenGL2
+        VTK::RenderingVolume
+        VTK::RenderingVolumeOpenGL2
         VTK::GUISupportQt
+)
+
+vtk_module_autoinit(
+    TARGETS DicomViewer
+    MODULES ${VTK_LIBRARIES}
 )
