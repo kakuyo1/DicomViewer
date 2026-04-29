@@ -167,6 +167,59 @@ QToolTip {
     border-bottom: 1px solid #6785ad;
 }
 
+#vrPresetCombo {
+    min-height: 34px;
+    padding: 0 34px 0 14px;
+    color: #e6edf7;
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #2f3745,
+        stop: 0.52 #28303c,
+        stop: 1 #202630
+    );
+    border-top: 1px solid #4f5c70;
+    border-left: 1px solid #455063;
+    border-right: 1px solid #303947;
+    border-bottom: 1px solid #4f5c70;
+    border-radius: 5px;
+    selection-background-color: #355070;
+    selection-color: #f4f8ff;
+}
+
+#vrPresetCombo:hover {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #384252,
+        stop: 0.52 #303947,
+        stop: 1 #252c38
+    );
+    border-top: 1px solid #61708a;
+    border-left: 1px solid #53627a;
+    border-right: 1px solid #3a4455;
+    border-bottom: 1px solid #61708a;
+}
+
+#vrPresetCombo:focus {
+    border: 1px solid #6f93c4;
+}
+
+#vrPresetCombo::drop-down {
+    border: none;
+    background: transparent;
+    width: 28px;
+}
+
+#vrPresetCombo QAbstractItemView {
+    color: #e7edf6;
+    background-color: #1b2028;
+    border: 1px solid #3b4553;
+    border-radius: 5px;
+    padding: 4px;
+    outline: none;
+    selection-background-color: #355070;
+    selection-color: #f4f8ff;
+}
+
 #sliceToolBarSeparator {
     background-color: #3d4552;
     min-height: 24px;

@@ -31,7 +31,9 @@ void SliceToolBar::setupUi()
     layout->setSpacing(8);
 
     mVRPresetCombo = new QComboBox(this);
+    mVRPresetCombo->setObjectName(QStringLiteral("vrPresetCombo"));
     mVRPresetCombo->setMinimumHeight(32);
+    mVRPresetCombo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     mVRPresetCombo->setCursor(Qt::PointingHandCursor);
     mVRPresetCombo->addItem(QStringLiteral("Bone"), static_cast<int>(VRPreset::Bone));
     mVRPresetCombo->addItem(QStringLiteral("Soft Tissue"), static_cast<int>(VRPreset::SoftTissue));
