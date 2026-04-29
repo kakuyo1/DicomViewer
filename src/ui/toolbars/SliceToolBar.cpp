@@ -1,6 +1,7 @@
 #include "SliceToolBar.h"
 
 #include <QButtonGroup>
+#include <QComboBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -28,6 +29,14 @@ void SliceToolBar::setupUi()
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 8, 12, 8);
     layout->setSpacing(8);
+
+    mVRPresetCombo = new QComboBox(this);
+    mVRPresetCombo->setMinimumHeight(32);
+    mVRPresetCombo->setCursor(Qt::PointingHandCursor);
+    mVRPresetCombo->addItem(QStringLiteral("Bone"), static_cast<int>(VRPreset::Bone));
+    mVRPresetCombo->addItem(QStringLiteral("Soft Tissue"), static_cast<int>(VRPreset::SoftTissue));
+    mVRPresetCombo->addItem(QStringLiteral("Skin"), static_cast<int>(VRPreset::Skin));
+    layout->addWidget(mVRPresetCombo);
 
     // 1.[Pan] [Zoom] [WL] [Measure] [Crosshair]
     mModeGroup = new QButtonGroup(this);
@@ -77,9 +86,16 @@ void SliceToolBar::setupUi()
     connect(mFlipVButton, &QToolButton::clicked, this, &SliceToolBar::flipVerticalTriggered);
     connect(mInvertButton, &QToolButton::clicked, this, &SliceToolBar::invertTriggered);
     connect(mResetButton, &QToolButton::clicked, this, &SliceToolBar::resetTriggered);
+    connect(mVRPresetCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (mVRPresetCombo == nullptr || index < 0) {
+            return;
+        }
+
+        emit vrPresetChanged(static_cast<VRPreset>(mVRPresetCombo->itemData(index).toInt()));
+    });
 
     mPanButton->setChecked(true);
-    setCrosshairVisible(false);
+    setViewMode(ViewMode::Stack);
 }
 
 QToolButton *SliceToolBar::createToolButton(const QString &text, const QString &iconPath, bool checkable)
@@ -140,6 +156,9 @@ void SliceToolBar::setViewMode(ViewMode mode)
     const bool mprMode   = (mode == ViewMode::MPR);
     const bool vrMode    = (mode == ViewMode::VR);
 
+    if (mVRPresetCombo != nullptr) {
+        mVRPresetCombo->setVisible(vrMode);
+    }
     if (mPanButton != nullptr) {
         mPanButton->setVisible(!vrMode);
     }

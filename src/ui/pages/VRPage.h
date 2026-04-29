@@ -6,6 +6,8 @@
 
 #include <QWidget>
 
+#include "ui/model/VRPreset.h"
+
 class QLabel;
 class QVTKOpenGLNativeWidget;
 class ViewerSession;
@@ -30,6 +32,7 @@ public:
 
     void setViewerSession(ViewerSession *viewerSession);
     void setRefreshEnabled(bool enabled);
+    void setPreset(VRPreset preset);
     void resetView();
 
 private:
@@ -39,7 +42,7 @@ private:
     void refreshFromSession();
     void clearDisplay();
     void updateVolumeData(const VolumeData &volumeData);
-    void setupDefaultTransferFunction();
+    void setupTransferFunctionForPreset(VRPreset preset);
     void renderVolume();
 
 private:
@@ -61,5 +64,6 @@ private:
     vtkSmartPointer<vtkPiecewiseFunction>         mOpacityTransferFunction;
 
     std::shared_ptr<const VolumeData> mCurrentVolumeData;
+    VRPreset mCurrentPreset = VRPreset::Bone;
     bool mHasVolume = false;
 };

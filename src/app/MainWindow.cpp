@@ -102,6 +102,7 @@ void MainWindow::setupConnects()
     connect(mSliceToolBar, &SliceToolBar::flipHorizontalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipHorizontal);
     connect(mSliceToolBar, &SliceToolBar::flipVerticalTriggered, mWorkSpaceWidget, &WorkSpaceWidget::triggerFlipVertical);
     connect(mSliceToolBar, &SliceToolBar::resetTriggered, mWorkSpaceWidget, &WorkSpaceWidget::resetCurrentView);
+    connect(mSliceToolBar, &SliceToolBar::vrPresetChanged, mWorkSpaceWidget, &WorkSpaceWidget::setVRPreset);
 
     // 用户点击缩略图切片 -> 主窗口渲染对应切片
     connect(mThumbnailPanel, &ThumbnailPanel::sliceActivated, mWorkSpaceWidget, &WorkSpaceWidget::setCurrentStackSliceIndex);

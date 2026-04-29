@@ -3,6 +3,7 @@
 #include <QStackedWidget>
 
 #include "ui/model/ViewMode.h"
+#include "ui/model/VRPreset.h"
 #include "ui/toolbars/SliceToolMode.h"
 
 class StackPage;
@@ -28,6 +29,7 @@ public:
     void triggerFlipHorizontal();
     void triggerFlipVertical();
     void resetCurrentView();
+    void setVRPreset(VRPreset preset);
 
     void setCurrentStackSliceIndex(int sliceIndex);
 

@@ -160,6 +160,13 @@ void WorkSpaceWidget::resetCurrentView()
     }
 }
 
+void WorkSpaceWidget::setVRPreset(VRPreset preset)
+{
+    if (mVRPage != nullptr) {
+        mVRPage->setPreset(preset);
+    }
+}
+
 void WorkSpaceWidget::setCurrentStackSliceIndex(int sliceIndex)
 {
     if (mStackPage != nullptr) {

@@ -2,11 +2,13 @@
 
 #include <QWidget>
 
+#include "ui/model/VRPreset.h"
 #include "ui/model/ViewMode.h"
 #include "ui/toolbars/SliceToolMode.h"
 
 class QAbstractButton;
 class QButtonGroup;
+class QComboBox;
 class QFrame;
 class QToolButton;
 
@@ -28,6 +30,7 @@ signals:
     void flipHorizontalTriggered();
     void flipVerticalTriggered();
     void resetTriggered();
+    void vrPresetChanged(VRPreset preset);
 
 private:
     void setupUi();
@@ -36,6 +39,7 @@ private:
     void handleModeButtonClicked(QAbstractButton *button);
 
 private:
+    QComboBox    *mVRPresetCombo     = nullptr;
     QButtonGroup *mModeGroup         = nullptr;
     QToolButton  *mPanButton         = nullptr;
     QToolButton  *mZoomButton        = nullptr;

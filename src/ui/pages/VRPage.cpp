@@ -85,7 +85,7 @@ void VRPage::setupVtkPipeline()
         return;
     }
 
-    setupDefaultTransferFunction();
+    setupTransferFunctionForPreset(mCurrentPreset);
     mVolumeProperty->SetColor(mColorTransferFunction);
     mVolumeProperty->SetScalarOpacity(mOpacityTransferFunction);
     // mVolumeProperty->ShadeOn();
@@ -133,6 +133,19 @@ void VRPage::setRefreshEnabled(bool enabled)
     mRefreshEnabled = enabled;
     if (mRefreshEnabled && mRefreshPending) { // 条件：1.在VR Page 2.有新的 volume 加载完毕
         refreshFromSession();
+    }
+}
+
+void VRPage::setPreset(VRPreset preset)
+{
+    if (mCurrentPreset == preset) {
+        return;
+    }
+
+    mCurrentPreset = preset;
+    setupTransferFunctionForPreset(mCurrentPreset);
+    if (mHasVolume && mRenderWindow != nullptr) {
+        mRenderWindow->Render();
     }
 }
 
@@ -216,20 +229,56 @@ void VRPage::updateVolumeData(const VolumeData &volumeData)
     mVolumeMapper->SetInputConnection(mVolumeImporter->GetOutputPort());
 }
 
-void VRPage::setupDefaultTransferFunction()
+void VRPage::setupTransferFunctionForPreset(VRPreset preset)
 {
     if (mColorTransferFunction == nullptr || mOpacityTransferFunction == nullptr) {
         return;
     }
 
     mColorTransferFunction->RemoveAllPoints();
+    mOpacityTransferFunction->RemoveAllPoints();
+
+    if (preset == VRPreset::SoftTissue) {
+        mColorTransferFunction->AddRGBPoint(-1000.0, 0.0, 0.0, 0.0);
+        mColorTransferFunction->AddRGBPoint(-200.0, 0.08, 0.07, 0.07);
+        mColorTransferFunction->AddRGBPoint(-50.0, 0.45, 0.20, 0.18);
+        mColorTransferFunction->AddRGBPoint(80.0, 0.82, 0.54, 0.48);
+        mColorTransferFunction->AddRGBPoint(300.0, 0.90, 0.82, 0.74);
+        mColorTransferFunction->AddRGBPoint(1000.0, 0.75, 0.74, 0.72);
+
+        mOpacityTransferFunction->AddPoint(-1000.0, 0.00);
+        mOpacityTransferFunction->AddPoint(-200.0, 0.00);
+        mOpacityTransferFunction->AddPoint(-50.0, 0.03);
+        mOpacityTransferFunction->AddPoint(80.0, 0.12);
+        mOpacityTransferFunction->AddPoint(300.0, 0.18);
+        mOpacityTransferFunction->AddPoint(1000.0, 0.08);
+        return;
+    }
+
+    if (preset == VRPreset::Skin) {
+        mColorTransferFunction->AddRGBPoint(-1000.0, 0.0, 0.0, 0.0);
+        mColorTransferFunction->AddRGBPoint(-300.0, 0.0, 0.0, 0.0);
+        mColorTransferFunction->AddRGBPoint(-100.0, 0.35, 0.18, 0.13);
+        mColorTransferFunction->AddRGBPoint(40.0, 0.95, 0.62, 0.46);
+        mColorTransferFunction->AddRGBPoint(150.0, 1.0, 0.78, 0.62);
+        mColorTransferFunction->AddRGBPoint(500.0, 0.95, 0.86, 0.78);
+
+        mOpacityTransferFunction->AddPoint(-1000.0, 0.00);
+        mOpacityTransferFunction->AddPoint(-300.0, 0.00);
+        mOpacityTransferFunction->AddPoint(-100.0, 0.02);
+        mOpacityTransferFunction->AddPoint(40.0, 0.18);
+        mOpacityTransferFunction->AddPoint(150.0, 0.08);
+        mOpacityTransferFunction->AddPoint(500.0, 0.00);
+        return;
+    }
+
+    // Bone
     mColorTransferFunction->AddRGBPoint(-1000.0, 0.0, 0.0, 0.0);
     mColorTransferFunction->AddRGBPoint(-300.0, 0.12, 0.12, 0.12);
     mColorTransferFunction->AddRGBPoint(300.0, 0.75, 0.72, 0.68);
     mColorTransferFunction->AddRGBPoint(1000.0, 1.0, 0.95, 0.85);
     mColorTransferFunction->AddRGBPoint(2000.0, 1.0, 1.0, 1.0);
 
-    mOpacityTransferFunction->RemoveAllPoints();
     mOpacityTransferFunction->AddPoint(-1000.0, 0.00);
     mOpacityTransferFunction->AddPoint(-300.0, 0.00);
     mOpacityTransferFunction->AddPoint(100.0, 0.02);
