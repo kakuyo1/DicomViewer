@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include "ui/model/ViewMode.h"
 #include "ui/toolbars/SliceToolMode.h"
 
 class QAbstractButton;
@@ -18,6 +19,7 @@ public:
     ~SliceToolBar();
 
     void setActiveToolMode(SliceToolMode mode);
+    void setViewMode(ViewMode mode);
     void setCrosshairVisible(bool visible);
 
 signals:
@@ -40,8 +42,10 @@ private:
     QToolButton  *mWindowLevelButton = nullptr;
     QToolButton  *mMeasureButton     = nullptr;
     QToolButton  *mCrosshairButton   = nullptr;
+    QFrame       *mModeSeparator      = nullptr;
     QToolButton  *mFlipHButton       = nullptr;
     QToolButton  *mFlipVButton       = nullptr;
     QToolButton  *mInvertButton      = nullptr;
+    QFrame       *mActionSeparator    = nullptr;
     QToolButton  *mResetButton       = nullptr;
 };

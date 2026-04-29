@@ -172,9 +172,8 @@ void MainWindow::handleViewModeChanged(ViewMode mode)
     if (mThumbnailPanel != nullptr) {
         mThumbnailPanel->setVisible(stackMode);
     }
-    // 只有 MPR 下才显示 Crosshair
     if (mSliceToolBar != nullptr) {
-        mSliceToolBar->setCrosshairVisible(mode == ViewMode::MPR);
+        mSliceToolBar->setViewMode(mode);
     }
     if (mSliceToolBar != nullptr && mWorkSpaceWidget != nullptr) {
         mSliceToolBar->setActiveToolMode(mWorkSpaceWidget->currentToolMode());

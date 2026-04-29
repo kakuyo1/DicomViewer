@@ -152,7 +152,7 @@ void VRPage::handleSessionChanged()
 {
     mRefreshPending = true; // 有待刷新的 volume
     if (!mRefreshEnabled) { // 如果没有在 VR Page，disable 后延迟刷新
-        clearDisplay();
+        clearDisplay();     // 隐藏时收到新 session，清掉旧 VR 引用，避免隐藏页面长期持有旧 volume
         return;
     }
 
@@ -182,11 +182,11 @@ void VRPage::clearDisplay()
     if (mRenderer != nullptr && mVolume != nullptr) {
         mRenderer->RemoveVolume(mVolume);
     }
-    if (mVolumeImporter != nullptr) {
+    if (mVolumeImporter != nullptr) { // 断开外部 buffer
         mVolumeImporter->SetImportVoidPointer(static_cast<void *>(nullptr));
         mVolumeImporter->Modified();
     }
-    mCurrentVolumeData.reset();
+    mCurrentVolumeData.reset(); // 释放
     if (mHintLabel != nullptr) {
         mHintLabel->setText(QStringLiteral("Import a CT series to view 3D volume rendering"));
         mHintLabel->show();

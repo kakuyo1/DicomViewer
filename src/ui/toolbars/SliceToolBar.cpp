@@ -51,7 +51,8 @@ void SliceToolBar::setupUi()
     layout->addWidget(mMeasureButton);
     layout->addWidget(mCrosshairButton);
     layout->addSpacing(4);
-    layout->addWidget(createSeparator());
+    mModeSeparator = createSeparator();
+    layout->addWidget(mModeSeparator);
     layout->addSpacing(4);
 
     // 2.[Flip H] [Flip V] [Invert]
@@ -63,7 +64,8 @@ void SliceToolBar::setupUi()
     layout->addWidget(mFlipVButton);
     layout->addWidget(mInvertButton);
     layout->addSpacing(4);
-    layout->addWidget(createSeparator());
+    mActionSeparator = createSeparator();
+    layout->addWidget(mActionSeparator);
     layout->addSpacing(4);
 
     // 3.[Reset]
@@ -129,6 +131,47 @@ void SliceToolBar::setActiveToolMode(SliceToolMode mode)
     }
     if (mode == SliceToolMode::Crosshair && mCrosshairButton != nullptr && mCrosshairButton->isVisible()) {
         mCrosshairButton->setChecked(true);
+    }
+}
+
+void SliceToolBar::setViewMode(ViewMode mode)
+{
+    const bool stackMode = (mode == ViewMode::Stack);
+    const bool mprMode   = (mode == ViewMode::MPR);
+    const bool vrMode    = (mode == ViewMode::VR);
+
+    if (mPanButton != nullptr) {
+        mPanButton->setVisible(!vrMode);
+    }
+    if (mZoomButton != nullptr) {
+        mZoomButton->setVisible(!vrMode);
+    }
+    if (mWindowLevelButton != nullptr) {
+        mWindowLevelButton->setVisible(!vrMode);
+    }
+    if (mMeasureButton != nullptr) {
+        mMeasureButton->setVisible(!vrMode);
+    }
+    if (mCrosshairButton != nullptr) {
+        mCrosshairButton->setVisible(mprMode);
+    }
+    if (mModeSeparator != nullptr) {
+        mModeSeparator->setVisible(!vrMode);
+    }
+    if (mFlipHButton != nullptr) {
+        mFlipHButton->setVisible(stackMode || mprMode);
+    }
+    if (mFlipVButton != nullptr) {
+        mFlipVButton->setVisible(stackMode || mprMode);
+    }
+    if (mInvertButton != nullptr) {
+        mInvertButton->setVisible(stackMode || mprMode);
+    }
+    if (mActionSeparator != nullptr) {
+        mActionSeparator->setVisible(!vrMode);
+    }
+    if (mResetButton != nullptr) {
+        mResetButton->setVisible(true);
     }
 }
 
