@@ -3,5 +3,6 @@ compile_commands.json
 AGENTS.md
 third_party/
 docs/temp/
+docs/CV/
 scripts/
 .qtcreator/

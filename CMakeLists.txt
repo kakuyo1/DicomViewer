@@ -1,3 +1,7 @@
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE, Release)
+endif()
+
 cmake_minimum_required(VERSION 3.21)
 
 project(DicomViewer VERSION 1.0.0 LANGUAGES C CXX)
