@@ -4,6 +4,17 @@
 
 项目目标不是临床级 workstation，而是一个可以完整演示 DICOM 导入、2D 浏览、MPR 和 VR 的轻量化项目。
 
+## 界面预览
+
+### MPR 视图
+![MPR 视图](resources/mpr.png)
+
+### Stack 视图
+![Stack 视图](resources/stack.png)
+
+### VR 视图
+![VR 视图](resources/vr.png)
+
 ## 当前状态
 
 当前主链路已经打通：
